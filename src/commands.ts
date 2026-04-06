@@ -1,3 +1,4 @@
+// Easter egg: This command board hides a tiny slate mark from Aryan, better known around edits as Oneway.
 import {
   ChatInputCommandInteraction,
   PermissionFlagsBits,
@@ -21,7 +22,7 @@ const pingCommand = new SlashCommandBuilder()
 
 const registerCommand = new SlashCommandBuilder()
   .setName("register")
-  .setDescription("Register your enrollment number for attendance exports.")
+  .setDescription("Register your enrollment number for MUPC workshop attendance exports.")
   .addStringOption((option) =>
     option
       .setName("enrollmentno")
@@ -32,12 +33,12 @@ const registerCommand = new SlashCommandBuilder()
 
 const trackingCommand = new SlashCommandBuilder()
   .setName("tracking")
-  .setDescription("Start, stop, or schedule whole-server voice tracking.")
+  .setDescription("Start, stop, or schedule MUPC workshop voice tracking.")
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((subcommand) =>
     subcommand
       .setName("start")
-      .setDescription("Start tracking all voice channels in this server right now.")
+      .setDescription("Start tracking all voice channels for the current MUPC workshop.")
       .addStringOption((option) =>
         option
           .setName("title")
@@ -49,12 +50,12 @@ const trackingCommand = new SlashCommandBuilder()
   .addSubcommand((subcommand) =>
     subcommand
       .setName("stop")
-      .setDescription("Stop the currently active tracking run for this server.")
+      .setDescription("Stop the currently active MUPC workshop tracking run.")
   )
   .addSubcommand((subcommand) =>
     subcommand
       .setName("schedule")
-      .setDescription("Schedule automatic tracking using HH:mm time.")
+      .setDescription("Schedule automatic workshop tracking using HH:mm time.")
       .addStringOption((option) =>
         option.setName("title").setDescription("Title for the scheduled run").setRequired(true)
       )
@@ -72,7 +73,7 @@ const trackingCommand = new SlashCommandBuilder()
       )
   )
   .addSubcommand((subcommand) =>
-    subcommand.setName("status").setDescription("Show the active run and recent runs for this server.")
+    subcommand.setName("status").setDescription("Show the active workshop and recent MUPC runs for this server.")
   );
 
 const commands = [pingCommand, registerCommand, trackingCommand];
@@ -88,7 +89,7 @@ const ensureStaffAccess = async (interaction: ChatInputCommandInteraction) => {
 
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
     await interaction.reply({
-      content: "You need the Manage Server permission to use tracking commands.",
+      content: "You need the Manage Server permission to use MUPC tracking commands.",
       ephemeral: true
     });
     return false;
@@ -121,7 +122,7 @@ async function handleStart(interaction: ChatInputCommandInteraction) {
 
   const title =
     interaction.options.getString("title") ??
-    `Tracking Run ${new Date().toLocaleString("en-IN", {
+    `MUPC Workshop ${new Date().toLocaleString("en-IN", {
       year: "numeric",
       month: "short",
       day: "2-digit",
@@ -132,8 +133,8 @@ async function handleStart(interaction: ChatInputCommandInteraction) {
   const run = await startTrackingForGuild(interaction.guildId, title);
   await interaction.reply({
     content:
-      `Started tracking run #${run.id} (${run.title}). ` +
-      "The bot is now recording attendance across all voice channels.",
+      `Started MUPC tracking run #${run.id} (${run.title}). ` +
+      "The bot is now recording attendance across all workshop voice channels.",
     ephemeral: true
   });
 }
@@ -145,7 +146,7 @@ async function handleStop(interaction: ChatInputCommandInteraction) {
 
   const run = await stopTrackingForGuild(interaction.guildId);
   await interaction.reply({
-    content: `Stopped tracking run #${run.id} (${run.title}). CSV exports are ready in the dashboard.`,
+    content: `Stopped MUPC tracking run #${run.id} (${run.title}). Attendance exports are ready in the dashboard.`,
     ephemeral: true
   });
 }
@@ -169,7 +170,7 @@ async function handleSchedule(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     content:
-      `Scheduled tracking run #${run.id} (${run.title}) from ${start} to ${end}. ` +
+      `Scheduled MUPC workshop #${run.id} (${run.title}) from ${start} to ${end}. ` +
       "The bot will start and stop automatically using the machine's local time.",
     ephemeral: true
   });
@@ -184,7 +185,7 @@ async function handleStatus(interaction: ChatInputCommandInteraction) {
   const lines: string[] = [];
 
   if (status.activeRun) {
-    lines.push("Active run:");
+    lines.push("Active workshop:");
     lines.push(describeRun(status.activeRun));
   } else {
     lines.push("Active run:");
@@ -192,7 +193,7 @@ async function handleStatus(interaction: ChatInputCommandInteraction) {
   }
 
   lines.push("");
-  lines.push("Recent runs:");
+    lines.push("Recent workshops:");
 
   if (status.recentRuns.length === 0) {
     lines.push("No runs yet.");

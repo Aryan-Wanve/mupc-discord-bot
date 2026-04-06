@@ -60,6 +60,20 @@ type ParticipantAggregate = {
   channelCount: number;
 };
 
+type UserAnalyticsRow = {
+  username: string;
+  userId: string;
+  enrollmentNo: string;
+  totalRunsJoined: number;
+  totalSeconds: number;
+  totalDuration: string;
+  averagePercentage: string;
+  averagePercentageValue: number;
+  totalSessions: number;
+  firstSeenDisplay: string;
+  lastSeenDisplay: string;
+};
+
 const sanitizeWorksheetName = (name: string) =>
   name.replace(/[:\\/?*\[\]]/g, " ").trim().slice(0, 31) || "Voice Channel";
 
@@ -299,6 +313,132 @@ const buildRunAnalytics = (runId: number, runStart: string | null, runEnd: strin
   };
 };
 
+const buildUserAnalytics = () => {
+  const runs = trackingRunRepository.list();
+  const sessions = trackingSessionRepository.listAll();
+  const registrations = new Map(
+    registeredUserRepository.list().map((user) => [user.user_id, user.enrollment_no])
+  );
+  const runDurations = new Map(
+    runs.map((run) => {
+      const seconds =
+        run.started_at && run.ended_at
+          ? Math.max(0, Math.floor((new Date(run.ended_at).getTime() - new Date(run.started_at).getTime()) / 1000))
+          : 0;
+      return [run.id, seconds];
+    })
+  );
+
+  const perUserPerRun = new Map<
+    string,
+    {
+      userId: string;
+      username: string;
+      runId: number;
+      totalSeconds: number;
+    }
+  >();
+
+  const perUser = new Map<
+    string,
+    {
+      username: string;
+      userId: string;
+      totalSeconds: number;
+      totalSessions: number;
+      runIds: Set<number>;
+      percentageValues: number[];
+      firstSeenIso: string;
+      lastSeenIso: string;
+    }
+  >();
+
+  for (const session of sessions) {
+    const userEntry = perUser.get(session.user_id) ?? {
+      username: session.username,
+      userId: session.user_id,
+      totalSeconds: 0,
+      totalSessions: 0,
+      runIds: new Set<number>(),
+      percentageValues: [],
+      firstSeenIso: session.joined_at,
+      lastSeenIso: session.left_at ?? session.joined_at
+    };
+
+    const leftAt = session.left_at ?? session.joined_at;
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((new Date(leftAt).getTime() - new Date(session.joined_at).getTime()) / 1000)
+    );
+
+    userEntry.totalSeconds += durationSeconds;
+    userEntry.totalSessions += 1;
+    userEntry.runIds.add(session.tracking_run_id);
+    if (new Date(session.joined_at).getTime() < new Date(userEntry.firstSeenIso).getTime()) {
+      userEntry.firstSeenIso = session.joined_at;
+    }
+    if (new Date(leftAt).getTime() > new Date(userEntry.lastSeenIso).getTime()) {
+      userEntry.lastSeenIso = leftAt;
+    }
+    perUser.set(session.user_id, userEntry);
+
+    const runKey = `${session.user_id}:${session.tracking_run_id}`;
+    const runEntry = perUserPerRun.get(runKey) ?? {
+      userId: session.user_id,
+      username: session.username,
+      runId: session.tracking_run_id,
+      totalSeconds: 0
+    };
+    runEntry.totalSeconds += durationSeconds;
+    perUserPerRun.set(runKey, runEntry);
+  }
+
+  for (const runEntry of perUserPerRun.values()) {
+    const userEntry = perUser.get(runEntry.userId);
+    const runSeconds = runDurations.get(runEntry.runId) ?? 0;
+    if (!userEntry) {
+      continue;
+    }
+
+    userEntry.percentageValues.push(runSeconds > 0 ? (runEntry.totalSeconds / runSeconds) * 100 : 0);
+  }
+
+  const rows: UserAnalyticsRow[] = [...perUser.values()]
+    .map((user) => {
+      const averagePercentageValue =
+        user.percentageValues.length > 0
+          ? user.percentageValues.reduce((sum, value) => sum + value, 0) / user.percentageValues.length
+          : 0;
+
+      return {
+        username: user.username,
+        userId: user.userId,
+        enrollmentNo: registrations.get(user.userId) ?? "Not registered",
+        totalRunsJoined: user.runIds.size,
+        totalSeconds: user.totalSeconds,
+        totalDuration: formatDuration(user.totalSeconds),
+        averagePercentage: `${averagePercentageValue.toFixed(2)}%`,
+        averagePercentageValue,
+        totalSessions: user.totalSessions,
+        firstSeenDisplay: formatDateTime(user.firstSeenIso),
+        lastSeenDisplay: formatDateTime(user.lastSeenIso)
+      };
+    })
+    .sort((left, right) => {
+      if (right.totalRunsJoined !== left.totalRunsJoined) {
+        return right.totalRunsJoined - left.totalRunsJoined;
+      }
+
+      if (right.averagePercentageValue !== left.averagePercentageValue) {
+        return right.averagePercentageValue - left.averagePercentageValue;
+      }
+
+      return right.totalSeconds - left.totalSeconds;
+    });
+
+  return rows;
+};
+
 const createWorkbookForRun = (runId: number) => {
   const run = trackingRunRepository.findById(runId);
   if (!run) {
@@ -408,10 +548,7 @@ app.get("/runs/:id", (req, res) => {
 });
 
 app.get("/users", (req, res) => {
-  const users = trackingSessionRepository.listUserSummaries().map((user) => ({
-    ...user,
-    total_display: formatDuration(user.total_seconds)
-  }));
+  const users = buildUserAnalytics();
 
   const registrations = registeredUserRepository.list().map((user) => ({
     ...user,
@@ -427,6 +564,44 @@ app.get("/users", (req, res) => {
   }));
 
   res.render("users", { users, sessions, registrations, currentPage: "users" });
+});
+
+app.get("/users/export.csv", (req, res) => {
+  const users = buildUserAnalytics();
+  const header = [
+    "Name",
+    "User ID",
+    "Enrollment No",
+    "Total Workshops Joined",
+    "Average Percentage of Duration",
+    "Total Duration",
+    "Total Sessions",
+    "First Seen",
+    "Last Seen"
+  ];
+
+  const rows = [
+    header.join(","),
+    ...users.map((user) =>
+      [
+        user.username,
+        user.userId,
+        user.enrollmentNo,
+        user.totalRunsJoined,
+        user.averagePercentage,
+        user.totalDuration,
+        user.totalSessions,
+        user.firstSeenDisplay,
+        user.lastSeenDisplay
+      ]
+        .map((value) => `"${String(value).replace(/"/g, "\"\"")}"`)
+        .join(",")
+    )
+  ];
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", "attachment; filename=\"all-user-attendance.csv\"");
+  res.send(rows.join("\n"));
 });
 
 app.get("/runs/:id/export.xlsx", async (req, res) => {

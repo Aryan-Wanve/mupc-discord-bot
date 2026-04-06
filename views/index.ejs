@@ -12,10 +12,10 @@
         <div class="hero-grid">
           <div class="hero-copy">
             <p class="eyebrow">Discord Attendance Tracker</p>
-            <h1>Whole-server tracking runs with per-channel Excel sheets.</h1>
+            <h1>Runs overview with exports and deep analytics.</h1>
             <p class="intro">
-              Start tracking from Discord, let the bot capture attendance across every voice channel,
-              and use this dashboard to download one Excel workbook where each VC becomes its own sheet.
+              Keep the main dashboard clean, then open each webinar to inspect voice engagement,
+              candidate behavior, channel performance, and attendance trends in detail.
             </p>
             <div class="hero-actions">
               <a href="/" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
@@ -26,15 +26,15 @@
           <aside class="hero-side">
             <div class="mini-card">
               <strong><%= runs.length %></strong>
-              <span>Total tracking runs</span>
+              <span>Total webinars</span>
             </div>
             <div class="mini-card">
               <strong><%= runs.filter((run) => run.is_active).length %></strong>
-              <span>Live right now</span>
+              <span>Currently live</span>
             </div>
             <div class="mini-card">
-              <strong><%= runs.reduce((sum, run) => sum + run.channels.length, 0) %></strong>
-              <span>Tracked voice channels</span>
+              <strong><%= runs.reduce((sum, run) => sum + run.total_participants, 0) %></strong>
+              <span>Total tracked attendees</span>
             </div>
           </aside>
         </div>
@@ -45,10 +45,10 @@
           <section class="card">
             <div class="page-title-row">
               <div>
-                <p class="eyebrow">Run Feed</p>
-                <h2>Recorded attendance runs</h2>
+                <p class="eyebrow">Overview</p>
+                <h2>Webinar runs</h2>
               </div>
-              <span class="muted-chip">Workbook export per run</span>
+              <span class="muted-chip">Compact view with drill-down pages</span>
             </div>
 
             <% if (runs.length === 0) { %>
@@ -57,82 +57,39 @@
                 <p>Use <strong>/tracking start</strong> or <strong>/tracking schedule</strong> in Discord to create one.</p>
               </div>
             <% } else { %>
-              <section class="list">
+              <section class="run-grid">
                 <% runs.forEach((run) => { %>
-                  <article class="subcard">
+                  <article class="run-card">
                     <div class="card-header">
                       <div>
                         <p class="eyebrow">Run #<%= run.id %></p>
-                        <h2><%= run.title %></h2>
+                        <h3><%= run.title %></h3>
                       </div>
                       <span class="status <%= run.is_active ? "live" : "idle" %>"><%= run.status %></span>
                     </div>
 
-                    <dl class="meta">
-                      <div>
-                        <dt>Guild ID</dt>
-                        <dd><%= run.guild_id %></dd>
+                    <div class="stats-grid compact-stats">
+                      <div class="stat-box">
+                        <div class="stat-label">Participants</div>
+                        <div class="stat-value"><%= run.total_participants %></div>
                       </div>
-                      <div>
-                        <dt>Created</dt>
-                        <dd><%= run.created_display %></dd>
+                      <div class="stat-box">
+                        <div class="stat-label">Channels</div>
+                        <div class="stat-value"><%= run.total_channels %></div>
                       </div>
-                      <div>
-                        <dt>Scheduled</dt>
-                        <dd><%= run.scheduled_start_display %> -> <%= run.scheduled_end_display %></dd>
+                      <div class="stat-box">
+                        <div class="stat-label">Duration</div>
+                        <div class="stat-value"><%= run.total_run_duration %></div>
                       </div>
-                      <div>
-                        <dt>Actual Window</dt>
-                        <dd><%= run.started_display %> -> <%= run.ended_display %></dd>
+                      <div class="stat-box">
+                        <div class="stat-label">Started</div>
+                        <div class="stat-value small-stat"><%= run.started_display %></div>
                       </div>
-                    </dl>
+                    </div>
 
                     <div class="actions">
                       <a href="/runs/<%= run.id %>/export.xlsx" class="button-link">Download Excel</a>
-                    </div>
-
-                    <div class="report">
-                      <h3>Tracked channels</h3>
-                      <% if (run.channels.length === 0) { %>
-                        <p class="empty-inline">No voice activity captured for this run.</p>
-                      <% } else { %>
-                        <% run.channels.forEach((channel) => { %>
-                          <section class="subcard">
-                            <div class="card-header">
-                              <div>
-                                <h3><%= channel.channel_name %></h3>
-                                <p class="notes"><%= channel.rows.length %> participant(s)</p>
-                              </div>
-                            </div>
-
-                            <div class="table-wrap">
-                              <table>
-                                <thead>
-                                  <tr>
-                                    <th>User</th>
-                                    <th>Total duration</th>
-                                    <th>Percentage</th>
-                                    <th>Sessions</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  <% channel.rows.forEach((entry) => { %>
-                                    <tr>
-                                      <td>
-                                        <strong><%= entry.username %></strong><br />
-                                        <small><%= entry.userId %></small>
-                                      </td>
-                                      <td><%= entry.totalDuration %></td>
-                                      <td><%= entry.percentage %></td>
-                                      <td><%= entry.totalSessions %></td>
-                                    </tr>
-                                  <% }) %>
-                                </tbody>
-                              </table>
-                            </div>
-                          </section>
-                        <% }) %>
-                      <% } %>
+                      <a href="/runs/<%= run.id %>" class="button-link secondary-link">Show More</a>
                     </div>
                   </article>
                 <% }) %>
@@ -143,45 +100,35 @@
 
         <aside class="stack">
           <section class="card">
-            <p class="eyebrow">Control Surface</p>
-            <h2>Command workflow</h2>
+            <p class="eyebrow">Insight Panels</p>
+            <h2>What the detail page shows</h2>
             <div class="stats-grid">
               <div class="stat-box">
-                <div class="stat-label">Manual Start</div>
-                <div class="stat-value">/tracking start</div>
+                <div class="stat-label">Top Attendees</div>
+                <div class="stat-value">Time Ranked</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Manual Stop</div>
-                <div class="stat-value">/tracking stop</div>
+                <div class="stat-label">Most Rejoined</div>
+                <div class="stat-value">Session Count</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Schedule</div>
-                <div class="stat-value">/tracking schedule</div>
+                <div class="stat-label">Earliest Arrivals</div>
+                <div class="stat-value">Arrival Order</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Register</div>
-                <div class="stat-value">/register</div>
+                <div class="stat-label">Busiest Channels</div>
+                <div class="stat-value">Duration Mix</div>
               </div>
             </div>
           </section>
 
           <section class="card">
-            <p class="eyebrow">Export Format</p>
-            <h2>Workbook structure</h2>
+            <p class="eyebrow">Note</p>
+            <h2>Candidate insight scope</h2>
             <p class="intro">
-              Every download is a single Excel workbook. Each voice channel becomes its own worksheet,
-              and every row includes enrollment-linked attendance metrics.
+              The current analytics page is based on voice attendance only. It highlights consistent
+              listeners, rejoin behavior, presence length, and cross-channel activity to help identify interested candidates.
             </p>
-            <div class="stats-grid">
-              <div class="stat-box">
-                <div class="stat-label">Sheet Naming</div>
-                <div class="stat-value">Channel Name</div>
-              </div>
-              <div class="stat-box">
-                <div class="stat-label">Metrics</div>
-                <div class="stat-value">8 Columns</div>
-              </div>
-            </div>
           </section>
         </aside>
       </section>

@@ -134,6 +134,10 @@ button:hover,
   background: var(--accent-strong);
 }
 
+.secondary-link {
+  background: #6f6a63;
+}
+
 button.secondary {
   background: #6f6a63;
 }
@@ -146,6 +150,14 @@ button.secondary {
 .card,
 .empty-state {
   padding: 28px;
+}
+
+.subcard {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.46);
 }
 
 .card-header,

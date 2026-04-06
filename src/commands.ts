@@ -1,5 +1,4 @@
 import {
-  ChannelType,
   ChatInputCommandInteraction,
   PermissionFlagsBits,
   REST,
@@ -7,59 +6,66 @@ import {
   SlashCommandBuilder
 } from "discord.js";
 import { config } from "./config";
-import { attendanceRepository, webinarRepository } from "./db";
-import { startWebinarTracking, stopWebinarTracking } from "./bot";
-import { formatDuration } from "./utils";
-
-const webinarCommand = new SlashCommandBuilder()
-  .setName("webinar")
-  .setDescription("Manage webinar attendance tracking.")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-  .addSubcommand((subcommand) =>
-    subcommand
-      .setName("create")
-      .setDescription("Create a webinar for a voice or stage channel.")
-      .addStringOption((option) =>
-        option.setName("title").setDescription("Webinar title").setRequired(true).setMaxLength(100)
-      )
-      .addChannelOption((option) =>
-        option
-          .setName("channel")
-          .setDescription("Voice channel to track")
-          .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice)
-          .setRequired(true)
-      )
-      .addStringOption((option) =>
-        option.setName("notes").setDescription("Optional notes for the webinar").setRequired(false)
-      )
-  )
-  .addSubcommand((subcommand) =>
-    subcommand
-      .setName("start")
-      .setDescription("Start attendance tracking for a webinar.")
-      .addIntegerOption((option) =>
-        option.setName("id").setDescription("Webinar ID from /webinar list").setRequired(true)
-      )
-  )
-  .addSubcommand((subcommand) =>
-    subcommand
-      .setName("stop")
-      .setDescription("Stop attendance tracking for a webinar.")
-      .addIntegerOption((option) =>
-        option.setName("id").setDescription("Webinar ID from /webinar list").setRequired(true)
-      )
-  )
-  .addSubcommand((subcommand) =>
-    subcommand.setName("list").setDescription("List recent webinars for this server.")
-  );
+import {
+  getTrackingStatusForGuild,
+  scheduleTrackingForGuild,
+  startTrackingForGuild,
+  stopTrackingForGuild
+} from "./bot";
+import { parseTodayTimeRange } from "./utils";
 
 const pingCommand = new SlashCommandBuilder()
   .setName("ping")
   .setDescription("Check whether the bot is responding.");
 
-const commands = [pingCommand, webinarCommand];
+const trackingCommand = new SlashCommandBuilder()
+  .setName("tracking")
+  .setDescription("Start, stop, or schedule whole-server voice tracking.")
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("start")
+      .setDescription("Start tracking all voice channels in this server right now.")
+      .addStringOption((option) =>
+        option
+          .setName("title")
+          .setDescription("Optional title for this tracking run")
+          .setRequired(false)
+          .setMaxLength(100)
+      )
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("stop")
+      .setDescription("Stop the currently active tracking run for this server.")
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("schedule")
+      .setDescription("Schedule automatic tracking using HH:mm time.")
+      .addStringOption((option) =>
+        option.setName("title").setDescription("Title for the scheduled run").setRequired(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("start")
+          .setDescription("Start time in 24-hour format, for example 08:00")
+          .setRequired(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("end")
+          .setDescription("End time in 24-hour format, for example 09:00")
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((subcommand) =>
+    subcommand.setName("status").setDescription("Show the active run and recent runs for this server.")
+  );
 
-const ensureAdminAccess = async (interaction: ChatInputCommandInteraction) => {
+const commands = [pingCommand, trackingCommand];
+
+const ensureStaffAccess = async (interaction: ChatInputCommandInteraction) => {
   if (!interaction.inCachedGuild()) {
     await interaction.reply({
       content: "This command can only be used inside a Discord server.",
@@ -68,10 +74,9 @@ const ensureAdminAccess = async (interaction: ChatInputCommandInteraction) => {
     return false;
   }
 
-  const memberPermissions = interaction.memberPermissions;
-  if (!memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
     await interaction.reply({
-      content: "Only server administrators can use webinar commands right now.",
+      content: "You need the Manage Server permission to use tracking commands.",
       ephemeral: true
     });
     return false;
@@ -80,116 +85,114 @@ const ensureAdminAccess = async (interaction: ChatInputCommandInteraction) => {
   return true;
 };
 
-const formatWebinarStatus = (isActive: number, startedAt: string | null, endedAt: string | null) => {
-  if (isActive) {
-    return "Live";
-  }
+const describeRun = (run: {
+  id: number;
+  title: string;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+}) =>
+  [
+    `#${run.id} - ${run.title}`,
+    `Status: ${run.status}`,
+    `Started: ${run.started_at ?? "Not started"}`,
+    `Ended: ${run.ended_at ?? "Not ended"}`,
+    `Scheduled: ${run.scheduled_start ?? "Not scheduled"} -> ${run.scheduled_end ?? "Not scheduled"}`
+  ].join("\n");
 
-  if (startedAt && endedAt) {
-    return "Stopped";
-  }
-
-  return "Draft";
-};
-
-const handleCreate = async (interaction: ChatInputCommandInteraction) => {
-  const title = interaction.options.getString("title", true);
-  const channel = interaction.options.getChannel("channel", true);
-  const notes = interaction.options.getString("notes") ?? undefined;
-
+async function handleStart(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId) {
     throw new Error("This command must be used inside a server.");
   }
 
-  const result = webinarRepository.create({
-    title,
+  const title =
+    interaction.options.getString("title") ??
+    `Tracking Run ${new Date().toLocaleString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    })}`;
+
+  const run = await startTrackingForGuild(interaction.guildId, title);
+  await interaction.reply({
+    content:
+      `Started tracking run #${run.id} (${run.title}). ` +
+      "The bot is now recording attendance across all voice channels.",
+    ephemeral: true
+  });
+}
+
+async function handleStop(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId) {
+    throw new Error("This command must be used inside a server.");
+  }
+
+  const run = await stopTrackingForGuild(interaction.guildId);
+  await interaction.reply({
+    content: `Stopped tracking run #${run.id} (${run.title}). CSV exports are ready in the dashboard.`,
+    ephemeral: true
+  });
+}
+
+async function handleSchedule(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId) {
+    throw new Error("This command must be used inside a server.");
+  }
+
+  const title = interaction.options.getString("title", true);
+  const start = interaction.options.getString("start", true);
+  const end = interaction.options.getString("end", true);
+  const range = parseTodayTimeRange(start, end);
+
+  const run = await scheduleTrackingForGuild({
     guildId: interaction.guildId,
-    channelId: channel.id,
-    notes
+    title,
+    scheduledStart: range.startIso,
+    scheduledEnd: range.endIso
   });
-
-  await interaction.reply({
-    content: `Created webinar #${result.lastInsertRowid} for ${channel.toString()}. Open the dashboard to export the CSV later.`,
-    ephemeral: true
-  });
-};
-
-const handleStart = async (interaction: ChatInputCommandInteraction) => {
-  const webinarId = interaction.options.getInteger("id", true);
-  const webinar = webinarRepository.findById(webinarId);
-
-  if (!interaction.guildId || !webinar || webinar.guild_id !== interaction.guildId) {
-    await interaction.reply({
-      content: "That webinar ID was not found for this server.",
-      ephemeral: true
-    });
-    return;
-  }
-
-  await startWebinarTracking(webinarId);
-  await interaction.reply({
-    content: `Attendance tracking started for webinar #${webinar.id} (${webinar.title}).`,
-    ephemeral: true
-  });
-};
-
-const handleStop = async (interaction: ChatInputCommandInteraction) => {
-  const webinarId = interaction.options.getInteger("id", true);
-  const webinar = webinarRepository.findById(webinarId);
-
-  if (!interaction.guildId || !webinar || webinar.guild_id !== interaction.guildId) {
-    await interaction.reply({
-      content: "That webinar ID was not found for this server.",
-      ephemeral: true
-    });
-    return;
-  }
-
-  stopWebinarTracking(webinarId);
-
-  const report = attendanceRepository.reportByWebinar(webinarId);
-  const trackedUsers = report.length;
-  const totalTime = report.reduce((sum, row) => sum + row.total_seconds, 0);
 
   await interaction.reply({
     content:
-      `Stopped webinar #${webinar.id} (${webinar.title}). ` +
-      `Tracked ${trackedUsers} participant(s) for a combined ${formatDuration(totalTime)}.`,
+      `Scheduled tracking run #${run.id} (${run.title}) from ${start} to ${end}. ` +
+      "The bot will start and stop automatically using the machine's local time.",
     ephemeral: true
   });
-};
+}
 
-const handleList = async (interaction: ChatInputCommandInteraction) => {
+async function handleStatus(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId) {
     throw new Error("This command must be used inside a server.");
   }
 
-  const webinars = webinarRepository.listByGuild(interaction.guildId).slice(0, 10);
-  if (webinars.length === 0) {
-    await interaction.reply({
-      content: "No webinars exist for this server yet. Use `/webinar create` first.",
-      ephemeral: true
-    });
-    return;
+  const status = getTrackingStatusForGuild(interaction.guildId);
+  const lines: string[] = [];
+
+  if (status.activeRun) {
+    lines.push("Active run:");
+    lines.push(describeRun(status.activeRun));
+  } else {
+    lines.push("Active run:");
+    lines.push("None");
   }
 
-  const lines = webinars.map((webinar) => {
-    const report = attendanceRepository.reportByWebinar(webinar.id);
-    const attendeeCount = report.length;
+  lines.push("");
+  lines.push("Recent runs:");
 
-    return [
-      `#${webinar.id} • ${webinar.title}`,
-      `Status: ${formatWebinarStatus(webinar.is_active, webinar.started_at, webinar.ended_at)}`,
-      `Channel: ${webinar.channel_id}`,
-      `Attendees tracked: ${attendeeCount}`
-    ].join("\n");
-  });
+  if (status.recentRuns.length === 0) {
+    lines.push("No runs yet.");
+  } else {
+    lines.push(...status.recentRuns.slice(0, 5).map(describeRun));
+  }
 
   await interaction.reply({
-    content: lines.join("\n\n"),
+    content: lines.join("\n"),
     ephemeral: true
   });
-};
+}
 
 export async function registerSlashCommands(guildIds: string[]) {
   if (guildIds.length === 0) {
@@ -207,29 +210,24 @@ export async function registerSlashCommands(guildIds: string[]) {
 }
 
 export async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
-  if (interaction.commandName === "ping") {
-    await interaction.reply({
-      content: "Pong! The bot is online and slash commands are working.",
-      ephemeral: true
-    });
-    return;
-  }
-
-  if (interaction.commandName !== "webinar") {
-    return;
-  }
-
-  if (!(await ensureAdminAccess(interaction))) {
-    return;
-  }
-
   try {
-    const subcommand = interaction.options.getSubcommand(true);
-    if (subcommand === "create") {
-      await handleCreate(interaction);
+    if (interaction.commandName === "ping") {
+      await interaction.reply({
+        content: "Pong! The bot is online and slash commands are working.",
+        ephemeral: true
+      });
       return;
     }
 
+    if (interaction.commandName !== "tracking") {
+      return;
+    }
+
+    if (!(await ensureStaffAccess(interaction))) {
+      return;
+    }
+
+    const subcommand = interaction.options.getSubcommand(true);
     if (subcommand === "start") {
       await handleStart(interaction);
       return;
@@ -240,7 +238,12 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       return;
     }
 
-    await handleList(interaction);
+    if (subcommand === "schedule") {
+      await handleSchedule(interaction);
+      return;
+    }
+
+    await handleStatus(interaction);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Something went wrong while handling the command.";
 

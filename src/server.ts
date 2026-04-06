@@ -1,9 +1,8 @@
-import express, { Request, Response, NextFunction } from "express";
+import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import { config } from "./config";
-import { attendanceRepository, webinarRepository } from "./db";
-import { startWebinarTracking, stopWebinarTracking } from "./bot";
-import { csvEscape, formatDuration } from "./utils";
+import { trackingRunRepository, trackingSessionRepository } from "./db";
+import { csvEscape, formatDateTime, formatDuration } from "./utils";
 
 const app = express();
 
@@ -33,61 +32,57 @@ const requireBasicAuth = (req: Request, res: Response, next: NextFunction) => {
 app.use(requireBasicAuth);
 
 app.get("/", (req, res) => {
-  const webinars = webinarRepository.list().map((webinar) => ({
-    ...webinar,
-    report: attendanceRepository.reportByWebinar(webinar.id).map((entry) => ({
-      ...entry,
-      total_display: formatDuration(entry.total_seconds)
-    }))
+  const runs = trackingRunRepository.list().map((run) => {
+    const channels = trackingSessionRepository.listChannelSummariesByRun(run.id).map((channel) => ({
+      ...channel,
+      report: trackingSessionRepository.reportByRunAndChannel(run.id, channel.channel_id).map((entry) => ({
+        ...entry,
+        total_display: formatDuration(entry.total_seconds)
+      }))
+    }));
+
+    return {
+      ...run,
+      created_display: formatDateTime(run.created_at),
+      scheduled_start_display: formatDateTime(run.scheduled_start),
+      scheduled_end_display: formatDateTime(run.scheduled_end),
+      started_display: formatDateTime(run.started_at),
+      ended_display: formatDateTime(run.ended_at),
+      channels
+    };
+  });
+
+  res.render("index", { runs });
+});
+
+app.get("/users", (req, res) => {
+  const users = trackingSessionRepository.listUserSummaries().map((user) => ({
+    ...user,
+    total_display: formatDuration(user.total_seconds)
   }));
 
-  res.render("index", { webinars });
+  const sessions = trackingSessionRepository.listAll().map((session) => ({
+    ...session,
+    joined_display: formatDateTime(session.joined_at),
+    left_display: formatDateTime(session.left_at)
+  }));
+
+  res.render("users", { users, sessions });
 });
 
-app.post("/webinars", (req, res) => {
-  const title = String(req.body.title ?? "").trim();
-  const guildId = String(req.body.guildId ?? "").trim();
-  const channelId = String(req.body.channelId ?? "").trim();
-  const notes = String(req.body.notes ?? "").trim();
-
-  if (!title || !guildId || !channelId) {
-    return res.status(400).send("Title, guild ID, and channel ID are required.");
+app.get("/runs/:id/export.csv", (req, res) => {
+  const runId = Number(req.params.id);
+  const run = trackingRunRepository.findById(runId);
+  if (!run) {
+    return res.status(404).send("Tracking run not found.");
   }
 
-  webinarRepository.create({ title, guildId, channelId, notes });
-  res.redirect("/");
-});
-
-app.post("/webinars/:id/start", async (req, res) => {
-  try {
-    await startWebinarTracking(Number(req.params.id));
-    res.redirect("/");
-  } catch (error) {
-    res.status(400).send(error instanceof Error ? error.message : "Failed to start webinar.");
-  }
-});
-
-app.post("/webinars/:id/stop", (req, res) => {
-  try {
-    stopWebinarTracking(Number(req.params.id));
-    res.redirect("/");
-  } catch (error) {
-    res.status(400).send(error instanceof Error ? error.message : "Failed to stop webinar.");
-  }
-});
-
-app.get("/webinars/:id/export.csv", (req, res) => {
-  const webinarId = Number(req.params.id);
-  const webinar = webinarRepository.findById(webinarId);
-  if (!webinar) {
-    return res.status(404).send("Webinar not found.");
-  }
-
-  const report = attendanceRepository.reportByWebinar(webinarId);
+  const report = trackingSessionRepository.fullReportByRun(runId);
   const csvRows = [
-    ["User ID", "Username", "Total Seconds", "Total Duration", "Marked Timings"].join(","),
+    ["Channel", "User ID", "Username", "Total Seconds", "Total Duration", "Marked Timings"].join(","),
     ...report.map((row) =>
       [
+        csvEscape(row.channel_name),
         csvEscape(row.user_id),
         csvEscape(row.username),
         csvEscape(row.total_seconds),
@@ -100,7 +95,45 @@ app.get("/webinars/:id/export.csv", (req, res) => {
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${webinar.title.replace(/[^a-z0-9_-]+/gi, "_").toLowerCase()}-attendance.csv"`
+    `attachment; filename="${run.title.replace(/[^a-z0-9_-]+/gi, "_").toLowerCase()}-all-channels.csv"`
+  );
+  res.send(csvRows.join("\n"));
+});
+
+app.get("/runs/:id/channels/:channelId/export.csv", (req, res) => {
+  const runId = Number(req.params.id);
+  const channelId = req.params.channelId;
+  const run = trackingRunRepository.findById(runId);
+  if (!run) {
+    return res.status(404).send("Tracking run not found.");
+  }
+
+  const report = trackingSessionRepository.reportByRunAndChannel(runId, channelId);
+  if (report.length === 0) {
+    return res.status(404).send("Channel report not found.");
+  }
+
+  const csvRows = [
+    ["Channel", "User ID", "Username", "Total Seconds", "Total Duration", "Marked Timings"].join(","),
+    ...report.map((row) =>
+      [
+        csvEscape(row.channel_name),
+        csvEscape(row.user_id),
+        csvEscape(row.username),
+        csvEscape(row.total_seconds),
+        csvEscape(formatDuration(row.total_seconds)),
+        csvEscape(row.sessions)
+      ].join(",")
+    )
+  ];
+
+  const safeTitle = run.title.replace(/[^a-z0-9_-]+/gi, "_").toLowerCase();
+  const safeChannel = report[0].channel_name.replace(/[^a-z0-9_-]+/gi, "_").toLowerCase();
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${safeTitle}-${safeChannel}.csv"`
   );
   res.send(csvRows.join("\n"));
 });

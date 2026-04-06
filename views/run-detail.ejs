@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= run.title %> Analytics</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Run Analytics</p>
+            <h1><%= run.title %></h1>
+            <p class="intro">
+              Drill into voice-based engagement for this webinar: longest attendees, repeated joiners,
+              cross-channel explorers, earliest arrivals, latest leavers, and channel-level activity patterns.
+            </p>
+            <div class="hero-actions">
+              <a href="/" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
+              <a href="/users" class="button-link <%= currentPage === "users" ? "is-active" : "secondary-link" %>">Users DB</a>
+              <a href="/runs/<%= run.id %>/export.xlsx" class="button-link">Download Excel</a>
+            </div>
+          </div>
+
+          <aside class="hero-side">
+            <div class="mini-card">
+              <strong><%= analytics.totalParticipants %></strong>
+              <span>Total attendees</span>
+            </div>
+            <div class="mini-card">
+              <strong><%= analytics.totalChannels %></strong>
+              <span>Active voice channels</span>
+            </div>
+            <div class="mini-card">
+              <strong><%= analytics.totalRunDuration %></strong>
+              <span>Run duration</span>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="grid-layout">
+        <div class="stack">
+          <section class="card">
+            <div class="page-title-row">
+              <div>
+                <p class="eyebrow">Run Meta</p>
+                <h2>Session overview</h2>
+              </div>
+              <span class="muted-chip">Run #<%= run.id %></span>
+            </div>
+
+            <dl class="meta">
+              <div>
+                <dt>Status</dt>
+                <dd><%= run.status %></dd>
+              </div>
+              <div>
+                <dt>Guild ID</dt>
+                <dd><%= run.guild_id %></dd>
+              </div>
+              <div>
+                <dt>Created</dt>
+                <dd><%= run.created_display %></dd>
+              </div>
+              <div>
+                <dt>Scheduled</dt>
+                <dd><%= run.scheduled_start_display %> -> <%= run.scheduled_end_display %></dd>
+              </div>
+              <div>
+                <dt>Actual Window</dt>
+                <dd><%= run.started_display %> -> <%= run.ended_display %></dd>
+              </div>
+              <div>
+                <dt>Voice Scope</dt>
+                <dd>All tracked voice channels in the server</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="card">
+            <div class="page-title-row">
+              <div>
+                <p class="eyebrow">Leaderboards</p>
+                <h2>Voice engagement graphs</h2>
+              </div>
+              <span class="muted-chip">Voice-based candidate signals</span>
+            </div>
+
+            <div class="analytics-grid">
+              <section class="chart-card">
+                <h3>Top attendees</h3>
+                <p class="notes">Longest total voice presence in this webinar.</p>
+                <div class="bar-list">
+                  <% analytics.topAttendees.forEach((person) => { %>
+                    <div class="bar-row">
+                      <div class="bar-head">
+                        <div>
+                          <strong><%= person.username %></strong>
+                          <small><%= person.enrollmentNo %></small>
+                        </div>
+                        <span><%= person.totalDuration %></span>
+                      </div>
+                      <div class="bar-track"><div class="bar-fill" style="width: <%= person.barWidth %>"></div></div>
+                    </div>
+                  <% }) %>
+                </div>
+              </section>
+
+              <section class="chart-card">
+                <h3>Most rejoined</h3>
+                <p class="notes">Users who came back repeatedly during the session.</p>
+                <div class="bar-list">
+                  <% analytics.mostRejoined.forEach((person) => { %>
+                    <div class="bar-row">
+                      <div class="bar-head">
+                        <div>
+                          <strong><%= person.username %></strong>
+                          <small><%= person.totalDuration %></small>
+                        </div>
+                        <span><%= person.totalSessions %> sessions</span>
+                      </div>
+                      <div class="bar-track"><div class="bar-fill accent-two" style="width: <%= person.barWidth %>"></div></div>
+                    </div>
+                  <% }) %>
+                </div>
+              </section>
+
+              <section class="chart-card">
+                <h3>Cross-channel explorers</h3>
+                <p class="notes">People who touched the most voice spaces during the run.</p>
+                <div class="bar-list">
+                  <% analytics.explorers.forEach((person) => { %>
+                    <div class="bar-row">
+                      <div class="bar-head">
+                        <div>
+                          <strong><%= person.username %></strong>
+                          <small><%= person.enrollmentNo %></small>
+                        </div>
+                        <span><%= person.channelCount %> channels</span>
+                      </div>
+                      <div class="bar-track"><div class="bar-fill accent-three" style="width: <%= person.barWidth %>"></div></div>
+                    </div>
+                  <% }) %>
+                </div>
+              </section>
+
+              <section class="chart-card">
+                <h3>Busiest channels</h3>
+                <p class="notes">Total accumulated attendance time by channel.</p>
+                <div class="bar-list">
+                  <% analytics.channels.forEach((channel) => { %>
+                    <div class="bar-row">
+                      <div class="bar-head">
+                        <div>
+                          <strong><%= channel.channelName %></strong>
+                          <small><%= channel.rows.length %> attendee(s)</small>
+                        </div>
+                        <span><%= channel.totalDuration %></span>
+                      </div>
+                      <div class="bar-track"><div class="bar-fill" style="width: <%= channel.topBarWidth %>"></div></div>
+                    </div>
+                  <% }) %>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="page-title-row">
+              <div>
+                <p class="eyebrow">Channel Breakdown</p>
+                <h2>Per-channel participation</h2>
+              </div>
+              <span class="muted-chip">Detailed voice rollup</span>
+            </div>
+
+            <% if (analytics.channels.length === 0) { %>
+              <p class="empty-inline">No voice activity captured for this run.</p>
+            <% } else { %>
+              <section class="list">
+                <% analytics.channels.forEach((channel) => { %>
+                  <article class="subcard">
+                    <div class="card-header">
+                      <div>
+                        <h3><%= channel.channelName %></h3>
+                        <p class="notes"><%= channel.rows.length %> attendee(s) • avg <%= channel.averageDuration %></p>
+                      </div>
+                      <span class="muted-chip"><%= channel.totalDuration %></span>
+                    </div>
+
+                    <div class="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>User</th>
+                            <th>Enrollment</th>
+                            <th>Total duration</th>
+                            <th>Percentage</th>
+                            <th>First join</th>
+                            <th>Last leave</th>
+                            <th>Sessions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <% channel.rows.forEach((entry) => { %>
+                            <tr>
+                              <td><strong><%= entry.username %></strong><br /><small><%= entry.userId %></small></td>
+                              <td><%= entry.enrollmentNo %></td>
+                              <td><%= entry.totalDuration %></td>
+                              <td><%= entry.percentage %></td>
+                              <td><%= entry.firstJoin %></td>
+                              <td><%= entry.lastLeave %></td>
+                              <td><%= entry.totalSessions %></td>
+                            </tr>
+                          <% }) %>
+                        </tbody>
+                      </table>
+                    </div>
+                  </article>
+                <% }) %>
+              </section>
+            <% } %>
+          </section>
+        </div>
+
+        <aside class="stack">
+          <section class="card">
+            <p class="eyebrow">Arrival Signals</p>
+            <h2>Early interest</h2>
+            <div class="insight-list">
+              <% analytics.earliestArrivals.forEach((person) => { %>
+                <div class="insight-row">
+                  <div>
+                    <strong><%= person.username %></strong>
+                    <small><%= person.enrollmentNo %></small>
+                  </div>
+                  <span><%= person.firstJoinDisplay %></span>
+                </div>
+              <% }) %>
+            </div>
+          </section>
+
+          <section class="card">
+            <p class="eyebrow">Retention Signals</p>
+            <h2>Stayed latest</h2>
+            <div class="insight-list">
+              <% analytics.latestLeavers.forEach((person) => { %>
+                <div class="insight-row">
+                  <div>
+                    <strong><%= person.username %></strong>
+                    <small><%= person.totalDuration %></small>
+                  </div>
+                  <span><%= person.lastLeaveDisplay %></span>
+                </div>
+              <% }) %>
+            </div>
+          </section>
+
+          <section class="card">
+            <p class="eyebrow">Interpretation</p>
+            <h2>Candidate insight lens</h2>
+            <p class="intro">
+              This page currently measures voice attendance behavior, not text chat. It is best for spotting
+              listeners who show up early, stay long, come back repeatedly, or explore multiple discussion spaces.
+            </p>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

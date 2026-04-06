@@ -1,0 +1,11 @@
+import { loginBot } from "./bot";
+import { startServer } from "./server";
+
+async function main() {
+  await Promise.all([loginBot(), startServer()]);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

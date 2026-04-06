@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webinar Attendance Dashboard</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Discord Webinar Tracker</p>
+          <h1>Voice attendance with downloadable timing logs.</h1>
+          <p class="intro">
+            Create a webinar, point it at a voice channel, start tracking when the session begins,
+            and export a CSV with total attendance plus exact join and leave timestamps.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Create webinar</h2>
+        <form method="post" action="/webinars" class="form-grid">
+          <label>
+            <span>Title</span>
+            <input name="title" placeholder="April Webinar" required />
+          </label>
+          <label>
+            <span>Guild ID</span>
+            <input name="guildId" placeholder="Discord server ID" required />
+          </label>
+          <label>
+            <span>Voice channel ID</span>
+            <input name="channelId" placeholder="Voice channel ID" required />
+          </label>
+          <label class="full">
+            <span>Notes</span>
+            <textarea name="notes" rows="3" placeholder="Optional notes for this webinar"></textarea>
+          </label>
+          <button type="submit">Save webinar</button>
+        </form>
+      </section>
+
+      <section class="list">
+        <% if (webinars.length === 0) { %>
+          <div class="empty-state">
+            <h2>No webinars yet</h2>
+            <p>Create your first webinar above to start recording attendance.</p>
+          </div>
+        <% } %>
+
+        <% webinars.forEach((webinar) => { %>
+          <article class="card">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">#<%= webinar.id %></p>
+                <h2><%= webinar.title %></h2>
+              </div>
+              <span class="status <%= webinar.is_active ? "live" : "idle" %>">
+                <%= webinar.is_active ? "Live" : webinar.started_at ? "Stopped" : "Draft" %>
+              </span>
+            </div>
+
+            <dl class="meta">
+              <div>
+                <dt>Guild ID</dt>
+                <dd><%= webinar.guild_id %></dd>
+              </div>
+              <div>
+                <dt>Channel ID</dt>
+                <dd><%= webinar.channel_id %></dd>
+              </div>
+              <div>
+                <dt>Started</dt>
+                <dd><%= webinar.started_at || "Not started" %></dd>
+              </div>
+              <div>
+                <dt>Ended</dt>
+                <dd><%= webinar.ended_at || "Still running" %></dd>
+              </div>
+            </dl>
+
+            <% if (webinar.notes) { %>
+              <p class="notes"><%= webinar.notes %></p>
+            <% } %>
+
+            <div class="actions">
+              <% if (!webinar.is_active) { %>
+                <form method="post" action="/webinars/<%= webinar.id %>/start">
+                  <button type="submit">Start tracking</button>
+                </form>
+              <% } %>
+              <% if (webinar.is_active) { %>
+                <form method="post" action="/webinars/<%= webinar.id %>/stop">
+                  <button type="submit" class="secondary">Stop tracking</button>
+                </form>
+              <% } %>
+              <a href="/webinars/<%= webinar.id %>/export.csv" class="button-link">Download CSV</a>
+            </div>
+
+            <div class="report">
+              <h3>Attendance summary</h3>
+              <% if (webinar.report.length === 0) { %>
+                <p class="empty-inline">No attendance captured yet.</p>
+              <% } else { %>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Total time</th>
+                      <th>Marked timings</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% webinar.report.forEach((entry) => { %>
+                      <tr>
+                        <td><strong><%= entry.username %></strong><br /><small><%= entry.user_id %></small></td>
+                        <td><%= entry.total_display %></td>
+                        <td><%= entry.sessions %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              <% } %>
+            </div>
+          </article>
+        <% }) %>
+      </section>
+    </main>
+  </body>
+</html>

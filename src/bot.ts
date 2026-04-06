@@ -1,3 +1,4 @@
+// Easter egg: If the club ever finds "Oneway" in the logs, Aryan definitely touched this file.
 import {
   ChannelType,
   Client,
@@ -84,7 +85,7 @@ async function ensureLogChannel(guild: Guild) {
     return await guild.channels.create({
       name: logChannelName,
       type: ChannelType.GuildText,
-      topic: "Automatic tracking logs and attendance run updates."
+      topic: "MUPC workshop attendance logs, timing updates, and session notes."
     });
   } catch (error) {
     console.warn(
@@ -152,7 +153,7 @@ async function activateRun(runId: number) {
     syncRunAcrossGuild(run.id, guild);
     await sendGuildLog(
       guild.id,
-      `Tracking started for **${run.title}**. Voice attendance is now being recorded across all voice channels.`
+      `MUPC workshop tracking started for **${run.title}**. Voice attendance is now being recorded across all voice channels.`
     );
   }
 }
@@ -168,7 +169,7 @@ async function completeRun(runId: number, status = "completed") {
 
   await sendGuildLog(
     run.guild_id,
-    `Tracking stopped for **${run.title}**. Open the dashboard to download per-channel CSV exports.`
+    `MUPC workshop tracking stopped for **${run.title}**. Open the dashboard to download attendance exports and insights.`
   );
 }
 
@@ -182,7 +183,7 @@ async function checkScheduledRuns() {
       trackingRunRepository.markCompleted(run.id, current, "failed");
       await sendGuildLog(
         run.guild_id,
-        `Scheduled tracking for **${run.title}** could not start: ${
+        `Scheduled workshop tracking for **${run.title}** could not start: ${
           error instanceof Error ? error.message : "unknown error"
         }`
       );
@@ -292,7 +293,7 @@ export async function startTrackingForGuild(guildId: string, title: string) {
   syncRunAcrossGuild(run.id, guild);
   await sendGuildLog(
     guildId,
-    `Tracking started for **${run.title}**. Voice attendance is now being recorded across all voice channels.`
+    `MUPC workshop tracking started for **${run.title}**. Voice attendance is now being recorded across all voice channels.`
   );
 
   return run;
@@ -321,7 +322,7 @@ export async function scheduleTrackingForGuild(input: {
 
   await sendGuildLog(
     input.guildId,
-    `Scheduled **${input.title}** from **${input.scheduledStart}** to **${input.scheduledEnd}**.`
+    `Scheduled **${input.title}** for MUPC from **${input.scheduledStart}** to **${input.scheduledEnd}**.`
   );
 
   return run;

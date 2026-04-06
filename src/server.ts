@@ -231,7 +231,7 @@ app.get("/", (req, res) => {
     };
   });
 
-  res.render("index", { runs });
+  res.render("index", { runs, currentPage: "runs" });
 });
 
 app.get("/users", (req, res) => {
@@ -253,7 +253,7 @@ app.get("/users", (req, res) => {
     left_display: formatDateTime(session.left_at)
   }));
 
-  res.render("users", { users, sessions, registrations });
+  res.render("users", { users, sessions, registrations, currentPage: "users" });
 });
 
 app.get("/runs/:id/export.xlsx", async (req, res) => {

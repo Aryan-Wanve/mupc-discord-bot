@@ -56,9 +56,9 @@ body::before {
 }
 
 .page {
-  width: min(1380px, calc(100% - 32px));
+  width: min(1780px, calc(100% - 28px));
   margin: 0 auto;
-  padding: 28px 0 72px;
+  padding: 20px 0 72px;
 }
 
 .hero,
@@ -102,8 +102,8 @@ body::before {
 
 .hero-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 0.95fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 2.35fr) minmax(320px, 0.95fr);
+  gap: 22px;
   align-items: stretch;
 }
 
@@ -187,7 +187,7 @@ h3 {
 
 .grid-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.9fr);
+  grid-template-columns: minmax(0, 1.8fr) minmax(380px, 0.92fr);
   gap: 20px;
   align-items: start;
 }
@@ -303,6 +303,16 @@ button:hover {
   color: var(--muted);
 }
 
+.is-active {
+  border-color: rgba(98, 230, 255, 0.7);
+  background: linear-gradient(135deg, rgba(98, 230, 255, 0.28), rgba(124, 92, 255, 0.3));
+  color: #ffffff;
+  box-shadow:
+    0 0 0 1px rgba(98, 230, 255, 0.18),
+    0 0 30px rgba(98, 230, 255, 0.2),
+    0 16px 36px rgba(10, 18, 30, 0.45);
+}
+
 .status {
   padding: 9px 14px;
   border-radius: 999px;
@@ -333,12 +343,13 @@ button:hover {
   overflow: auto;
   border-radius: 20px;
   border: 1px solid rgba(110, 147, 255, 0.14);
+  width: 100%;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 680px;
+  min-width: 100%;
   background: rgba(3, 8, 18, 0.66);
 }
 
@@ -399,7 +410,7 @@ small {
 
 @media (max-width: 720px) {
   .page {
-    width: min(100% - 18px, 1380px);
+    width: min(100% - 18px, 1780px);
     padding-top: 18px;
   }
 

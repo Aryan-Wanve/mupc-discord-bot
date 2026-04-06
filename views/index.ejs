@@ -18,8 +18,8 @@
               and use this dashboard to download one Excel workbook where each VC becomes its own sheet.
             </p>
             <div class="hero-actions">
-              <a href="/" class="button-link">Runs</a>
-              <a href="/users" class="button-link secondary-link">Users DB</a>
+              <a href="/" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
+              <a href="/users" class="button-link <%= currentPage === "users" ? "is-active" : "secondary-link" %>">Users DB</a>
             </div>
           </div>
 

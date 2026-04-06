@@ -9,101 +9,181 @@
   <body>
     <main class="page">
       <section class="hero">
-        <div>
-          <p class="eyebrow">Discord Attendance Tracker</p>
-          <h1>Whole-server tracking runs with per-channel Excel sheets.</h1>
-          <p class="intro">
-            Start tracking from Discord, let the bot capture attendance across every voice channel,
-            and use this dashboard to download one Excel workbook where each VC becomes its own sheet.
-          </p>
-          <div class="actions">
-            <a href="/" class="button-link">Runs</a>
-            <a href="/users" class="button-link secondary-link">Users DB</a>
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Discord Attendance Tracker</p>
+            <h1>Whole-server tracking runs with per-channel Excel sheets.</h1>
+            <p class="intro">
+              Start tracking from Discord, let the bot capture attendance across every voice channel,
+              and use this dashboard to download one Excel workbook where each VC becomes its own sheet.
+            </p>
+            <div class="hero-actions">
+              <a href="/" class="button-link">Runs</a>
+              <a href="/users" class="button-link secondary-link">Users DB</a>
+            </div>
           </div>
+
+          <aside class="hero-side">
+            <div class="mini-card">
+              <strong><%= runs.length %></strong>
+              <span>Total tracking runs</span>
+            </div>
+            <div class="mini-card">
+              <strong><%= runs.filter((run) => run.is_active).length %></strong>
+              <span>Live right now</span>
+            </div>
+            <div class="mini-card">
+              <strong><%= runs.reduce((sum, run) => sum + run.channels.length, 0) %></strong>
+              <span>Tracked voice channels</span>
+            </div>
+          </aside>
         </div>
       </section>
 
-      <section class="list">
-        <% if (runs.length === 0) { %>
-          <div class="empty-state">
-            <h2>No tracking runs yet</h2>
-            <p>Use <strong>/tracking start</strong> or <strong>/tracking schedule</strong> in Discord to create one.</p>
-          </div>
-        <% } %>
-
-        <% runs.forEach((run) => { %>
-          <article class="card">
-            <div class="card-header">
+      <section class="grid-layout">
+        <div class="stack">
+          <section class="card">
+            <div class="page-title-row">
               <div>
-                <p class="eyebrow">Run #<%= run.id %></p>
-                <h2><%= run.title %></h2>
+                <p class="eyebrow">Run Feed</p>
+                <h2>Recorded attendance runs</h2>
               </div>
-              <span class="status <%= run.is_active ? "live" : "idle" %>"><%= run.status %></span>
+              <span class="muted-chip">Workbook export per run</span>
             </div>
 
-            <dl class="meta">
-              <div>
-                <dt>Guild ID</dt>
-                <dd><%= run.guild_id %></dd>
+            <% if (runs.length === 0) { %>
+              <div class="empty-state">
+                <h2>No tracking runs yet</h2>
+                <p>Use <strong>/tracking start</strong> or <strong>/tracking schedule</strong> in Discord to create one.</p>
               </div>
-              <div>
-                <dt>Created</dt>
-                <dd><%= run.created_display %></dd>
-              </div>
-              <div>
-                <dt>Scheduled</dt>
-                <dd><%= run.scheduled_start_display %> -> <%= run.scheduled_end_display %></dd>
-              </div>
-              <div>
-                <dt>Actual Window</dt>
-                <dd><%= run.started_display %> -> <%= run.ended_display %></dd>
-              </div>
-            </dl>
-
-            <div class="actions">
-              <a href="/runs/<%= run.id %>/export.xlsx" class="button-link">Download Excel</a>
-            </div>
-
-            <div class="report">
-              <h3>Tracked channels</h3>
-              <% if (run.channels.length === 0) { %>
-                <p class="empty-inline">No voice activity captured for this run.</p>
-              <% } else { %>
-                <% run.channels.forEach((channel) => { %>
-                  <section class="subcard">
+            <% } else { %>
+              <section class="list">
+                <% runs.forEach((run) => { %>
+                  <article class="subcard">
                     <div class="card-header">
                       <div>
-                        <h3><%= channel.channel_name %></h3>
-                        <p class="notes"><%= channel.rows.length %> participant(s)</p>
+                        <p class="eyebrow">Run #<%= run.id %></p>
+                        <h2><%= run.title %></h2>
                       </div>
+                      <span class="status <%= run.is_active ? "live" : "idle" %>"><%= run.status %></span>
                     </div>
 
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>User</th>
-                          <th>Total duration</th>
-                          <th>Percentage</th>
-                          <th>Sessions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <% channel.rows.forEach((entry) => { %>
-                          <tr>
-                            <td><strong><%= entry.username %></strong><br /><small><%= entry.userId %></small></td>
-                            <td><%= entry.totalDuration %></td>
-                            <td><%= entry.percentage %></td>
-                            <td><%= entry.totalSessions %></td>
-                          </tr>
+                    <dl class="meta">
+                      <div>
+                        <dt>Guild ID</dt>
+                        <dd><%= run.guild_id %></dd>
+                      </div>
+                      <div>
+                        <dt>Created</dt>
+                        <dd><%= run.created_display %></dd>
+                      </div>
+                      <div>
+                        <dt>Scheduled</dt>
+                        <dd><%= run.scheduled_start_display %> -> <%= run.scheduled_end_display %></dd>
+                      </div>
+                      <div>
+                        <dt>Actual Window</dt>
+                        <dd><%= run.started_display %> -> <%= run.ended_display %></dd>
+                      </div>
+                    </dl>
+
+                    <div class="actions">
+                      <a href="/runs/<%= run.id %>/export.xlsx" class="button-link">Download Excel</a>
+                    </div>
+
+                    <div class="report">
+                      <h3>Tracked channels</h3>
+                      <% if (run.channels.length === 0) { %>
+                        <p class="empty-inline">No voice activity captured for this run.</p>
+                      <% } else { %>
+                        <% run.channels.forEach((channel) => { %>
+                          <section class="subcard">
+                            <div class="card-header">
+                              <div>
+                                <h3><%= channel.channel_name %></h3>
+                                <p class="notes"><%= channel.rows.length %> participant(s)</p>
+                              </div>
+                            </div>
+
+                            <div class="table-wrap">
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>User</th>
+                                    <th>Total duration</th>
+                                    <th>Percentage</th>
+                                    <th>Sessions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <% channel.rows.forEach((entry) => { %>
+                                    <tr>
+                                      <td>
+                                        <strong><%= entry.username %></strong><br />
+                                        <small><%= entry.userId %></small>
+                                      </td>
+                                      <td><%= entry.totalDuration %></td>
+                                      <td><%= entry.percentage %></td>
+                                      <td><%= entry.totalSessions %></td>
+                                    </tr>
+                                  <% }) %>
+                                </tbody>
+                              </table>
+                            </div>
+                          </section>
                         <% }) %>
-                      </tbody>
-                    </table>
-                  </section>
+                      <% } %>
+                    </div>
+                  </article>
                 <% }) %>
-              <% } %>
+              </section>
+            <% } %>
+          </section>
+        </div>
+
+        <aside class="stack">
+          <section class="card">
+            <p class="eyebrow">Control Surface</p>
+            <h2>Command workflow</h2>
+            <div class="stats-grid">
+              <div class="stat-box">
+                <div class="stat-label">Manual Start</div>
+                <div class="stat-value">/tracking start</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Manual Stop</div>
+                <div class="stat-value">/tracking stop</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Schedule</div>
+                <div class="stat-value">/tracking schedule</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Register</div>
+                <div class="stat-value">/register</div>
+              </div>
             </div>
-          </article>
-        <% }) %>
+          </section>
+
+          <section class="card">
+            <p class="eyebrow">Export Format</p>
+            <h2>Workbook structure</h2>
+            <p class="intro">
+              Every download is a single Excel workbook. Each voice channel becomes its own worksheet,
+              and every row includes enrollment-linked attendance metrics.
+            </p>
+            <div class="stats-grid">
+              <div class="stat-box">
+                <div class="stat-label">Sheet Naming</div>
+                <div class="stat-value">Channel Name</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Metrics</div>
+                <div class="stat-value">8 Columns</div>
+              </div>
+            </div>
+          </section>
+        </aside>
       </section>
     </main>
   </body>

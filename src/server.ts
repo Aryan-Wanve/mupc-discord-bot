@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import { config } from "./config";
-import { trackingRunRepository, trackingSessionRepository } from "./db";
+import { registeredUserRepository, trackingRunRepository, trackingSessionRepository } from "./db";
 import { formatDateTime, formatDuration, formatPercentage } from "./utils";
 
 const app = express();
@@ -34,6 +34,7 @@ type ExportRow = {
   serial: number;
   username: string;
   userId: string;
+  enrollmentNo: string;
   totalSeconds: number;
   totalDuration: string;
   percentage: string;
@@ -47,6 +48,9 @@ const sanitizeWorksheetName = (name: string) =>
 
 const summarizeRunByChannel = (runId: number, runStart: string | null, runEnd: string | null) => {
   const sessions = trackingSessionRepository.listByRun(runId);
+  const registrations = new Map(
+    registeredUserRepository.list().map((user) => [user.user_id, user.enrollment_no])
+  );
   const totalRunSeconds =
     runStart && runEnd
       ? Math.max(0, Math.floor((new Date(runEnd).getTime() - new Date(runStart).getTime()) / 1000))
@@ -60,6 +64,7 @@ const summarizeRunByChannel = (runId: number, runStart: string | null, runEnd: s
       channelName: string;
       userId: string;
       username: string;
+      enrollmentNo: string;
       firstJoin: string;
       lastLeave: string;
       totalSeconds: number;
@@ -82,6 +87,7 @@ const summarizeRunByChannel = (runId: number, runStart: string | null, runEnd: s
         channelName: session.channel_name,
         userId: session.user_id,
         username: session.username,
+        enrollmentNo: registrations.get(session.user_id) ?? "Not registered",
         firstJoin: session.joined_at,
         lastLeave: leftAt,
         totalSeconds: durationSeconds,
@@ -122,6 +128,7 @@ const summarizeRunByChannel = (runId: number, runStart: string | null, runEnd: s
       serial: channel.rows.length + 1,
       username: entry.username,
       userId: entry.userId,
+      enrollmentNo: entry.enrollmentNo,
       totalSeconds: entry.totalSeconds,
       totalDuration: formatDuration(entry.totalSeconds),
       percentage: formatPercentage(entry.totalSeconds, totalRunSeconds),
@@ -158,6 +165,7 @@ const createWorkbookForRun = (runId: number) => {
     "S.No",
     "Username",
     "User ID",
+    "Enrollment No",
     "Total Duration (HH:MM:SS)",
     "Percentage of Total Duration",
     "First Join",
@@ -174,6 +182,7 @@ const createWorkbookForRun = (runId: number) => {
         row.serial,
         row.username,
         row.userId,
+        row.enrollmentNo,
         row.totalDuration,
         row.percentage,
         row.firstJoin,
@@ -186,6 +195,7 @@ const createWorkbookForRun = (runId: number) => {
       { width: 8 },
       { width: 24 },
       { width: 24 },
+      { width: 20 },
       { width: 22 },
       { width: 24 },
       { width: 24 },
@@ -230,13 +240,20 @@ app.get("/users", (req, res) => {
     total_display: formatDuration(user.total_seconds)
   }));
 
+  const registrations = registeredUserRepository.list().map((user) => ({
+    ...user,
+    registered_display: formatDateTime(user.registered_at),
+    updated_display: formatDateTime(user.updated_at)
+  }));
+
   const sessions = trackingSessionRepository.listAll().map((session) => ({
     ...session,
+    enrollment_no: registeredUserRepository.findByUserId(session.user_id)?.enrollment_no ?? "Not registered",
     joined_display: formatDateTime(session.joined_at),
     left_display: formatDateTime(session.left_at)
   }));
 
-  res.render("users", { users, sessions });
+  res.render("users", { users, sessions, registrations });
 });
 
 app.get("/runs/:id/export.xlsx", async (req, res) => {

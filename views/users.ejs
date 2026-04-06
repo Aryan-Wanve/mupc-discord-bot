@@ -9,106 +9,169 @@
   <body>
     <main class="page">
       <section class="hero">
-        <div>
-          <p class="eyebrow">Attendance Database</p>
-          <h1>Raw user records and session history.</h1>
-          <p class="intro">
-            This page shows the raw stored attendance data so you can inspect who was tracked,
-            how many sessions they have, and the underlying join and leave rows in the database.
-          </p>
-          <div class="actions">
-            <a href="/" class="button-link">Runs</a>
-            <a href="/users" class="button-link secondary-link">Users DB</a>
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Attendance Database</p>
+            <h1>Raw user records and registration history.</h1>
+            <p class="intro">
+              Inspect the registration database, total tracked time per Discord user, and the raw
+              attendance rows that power the workbook exports.
+            </p>
+            <div class="hero-actions">
+              <a href="/" class="button-link">Runs</a>
+              <a href="/users" class="button-link secondary-link">Users DB</a>
+            </div>
           </div>
+
+          <aside class="hero-side">
+            <div class="mini-card">
+              <strong><%= registrations.length %></strong>
+              <span>Registered users</span>
+            </div>
+            <div class="mini-card">
+              <strong><%= users.length %></strong>
+              <span>Tracked profiles</span>
+            </div>
+            <div class="mini-card">
+              <strong><%= sessions.length %></strong>
+              <span>Raw session rows</span>
+            </div>
+          </aside>
         </div>
       </section>
 
-      <section class="card">
-        <h2>Registered users</h2>
-        <% if (registrations.length === 0) { %>
-          <p class="empty-inline">No users have registered an enrollment number yet.</p>
-        <% } else { %>
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Enrollment No</th>
-                <th>Registered</th>
-                <th>Last updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% registrations.forEach((user) => { %>
-                <tr>
-                  <td><strong><%= user.username %></strong><br /><small><%= user.user_id %></small></td>
-                  <td><%= user.enrollment_no %></td>
-                  <td><%= user.registered_display %></td>
-                  <td><%= user.updated_display %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        <% } %>
-      </section>
+      <section class="grid-layout">
+        <div class="stack">
+          <section class="card">
+            <div class="page-title-row">
+              <div>
+                <p class="eyebrow">Registry</p>
+                <h2>Registered users</h2>
+              </div>
+              <span class="muted-chip">Enrollment-linked identities</span>
+            </div>
 
-      <section class="card">
-        <h2>User totals</h2>
-        <% if (users.length === 0) { %>
-          <p class="empty-inline">No tracked users yet.</p>
-        <% } else { %>
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Enrollment No</th>
-                <th>Total tracked time</th>
-                <th>Session count</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% users.forEach((user) => { %>
-                <tr>
-                  <td><strong><%= user.username %></strong><br /><small><%= user.user_id %></small></td>
-                  <td><%= user.enrollment_no || "Not registered" %></td>
-                  <td><%= user.total_display %></td>
-                  <td><%= user.session_count %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        <% } %>
-      </section>
+            <% if (registrations.length === 0) { %>
+              <p class="empty-inline">No users have registered an enrollment number yet.</p>
+            <% } else { %>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Enrollment No</th>
+                      <th>Registered</th>
+                      <th>Last updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% registrations.forEach((user) => { %>
+                      <tr>
+                        <td><strong><%= user.username %></strong><br /><small><%= user.user_id %></small></td>
+                        <td><%= user.enrollment_no %></td>
+                        <td><%= user.registered_display %></td>
+                        <td><%= user.updated_display %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </section>
 
-      <section class="card">
-        <h2>Raw session rows</h2>
-        <% if (sessions.length === 0) { %>
-          <p class="empty-inline">No raw session data yet.</p>
-        <% } else { %>
-          <table>
-            <thead>
-              <tr>
-                <th>Run</th>
-                <th>Channel</th>
-                <th>User</th>
-                <th>Enrollment No</th>
-                <th>Joined</th>
-                <th>Left</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% sessions.forEach((session) => { %>
-                <tr>
-                  <td>#<%= session.tracking_run_id %></td>
-                  <td><%= session.channel_name %><br /><small><%= session.channel_id %></small></td>
-                  <td><strong><%= session.username %></strong><br /><small><%= session.user_id %></small></td>
-                  <td><%= session.enrollment_no %></td>
-                  <td><%= session.joined_display %></td>
-                  <td><%= session.left_display %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        <% } %>
+          <section class="card">
+            <div class="page-title-row">
+              <div>
+                <p class="eyebrow">History</p>
+                <h2>Raw session rows</h2>
+              </div>
+              <span class="muted-chip">Low-level attendance data</span>
+            </div>
+
+            <% if (sessions.length === 0) { %>
+              <p class="empty-inline">No raw session data yet.</p>
+            <% } else { %>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Run</th>
+                      <th>Channel</th>
+                      <th>User</th>
+                      <th>Enrollment No</th>
+                      <th>Joined</th>
+                      <th>Left</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% sessions.forEach((session) => { %>
+                      <tr>
+                        <td>#<%= session.tracking_run_id %></td>
+                        <td><%= session.channel_name %><br /><small><%= session.channel_id %></small></td>
+                        <td><strong><%= session.username %></strong><br /><small><%= session.user_id %></small></td>
+                        <td><%= session.enrollment_no %></td>
+                        <td><%= session.joined_display %></td>
+                        <td><%= session.left_display %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </section>
+        </div>
+
+        <aside class="stack">
+          <section class="card">
+            <p class="eyebrow">Totals</p>
+            <h2>User attendance summary</h2>
+            <% if (users.length === 0) { %>
+              <p class="empty-inline">No tracked users yet.</p>
+            <% } else { %>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Enrollment No</th>
+                      <th>Total tracked time</th>
+                      <th>Session count</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% users.forEach((user) => { %>
+                      <tr>
+                        <td><strong><%= user.username %></strong><br /><small><%= user.user_id %></small></td>
+                        <td><%= user.enrollment_no || "Not registered" %></td>
+                        <td><%= user.total_display %></td>
+                        <td><%= user.session_count %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </section>
+
+          <section class="card">
+            <p class="eyebrow">Identity Flow</p>
+            <h2>Registration rule</h2>
+            <p class="intro">
+              Each Discord user can register exactly one enrollment number using <strong>/register</strong>.
+              If they try again later, the bot tells them they are already registered.
+            </p>
+            <div class="stats-grid">
+              <div class="stat-box">
+                <div class="stat-label">Command</div>
+                <div class="stat-value">/register</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Duplicate Handling</div>
+                <div class="stat-value">Blocked</div>
+              </div>
+            </div>
+          </section>
+        </aside>
       </section>
     </main>
   </body>

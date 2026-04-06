@@ -38,9 +38,26 @@ type ExportRow = {
   totalSeconds: number;
   totalDuration: string;
   percentage: string;
+  firstJoinIso: string;
   firstJoin: string;
+  lastLeaveIso: string;
   lastLeave: string;
   totalSessions: number;
+};
+
+type ParticipantAggregate = {
+  username: string;
+  userId: string;
+  enrollmentNo: string;
+  totalSeconds: number;
+  totalDuration: string;
+  totalSessions: number;
+  firstJoinIso: string;
+  firstJoinDisplay: string;
+  lastLeaveIso: string;
+  lastLeaveDisplay: string;
+  percentage: string;
+  channelCount: number;
 };
 
 const sanitizeWorksheetName = (name: string) =>
@@ -132,7 +149,9 @@ const summarizeRunByChannel = (runId: number, runStart: string | null, runEnd: s
       totalSeconds: entry.totalSeconds,
       totalDuration: formatDuration(entry.totalSeconds),
       percentage: formatPercentage(entry.totalSeconds, totalRunSeconds),
+      firstJoinIso: entry.firstJoin,
       firstJoin: formatDateTime(entry.firstJoin),
+      lastLeaveIso: entry.lastLeave,
       lastLeave: formatDateTime(entry.lastLeave),
       totalSessions: entry.totalSessions
     });
@@ -147,6 +166,136 @@ const summarizeRunByChannel = (runId: number, runStart: string | null, runEnd: s
       channelName: value.channelName,
       rows: value.rows
     }))
+  };
+};
+
+const buildRunAnalytics = (runId: number, runStart: string | null, runEnd: string | null) => {
+  const summary = summarizeRunByChannel(runId, runStart, runEnd);
+  const participantMap = new Map<
+    string,
+    {
+      username: string;
+      userId: string;
+      enrollmentNo: string;
+      totalSeconds: number;
+      totalSessions: number;
+      firstJoinIso: string;
+      lastLeaveIso: string;
+      channels: Set<string>;
+    }
+  >();
+
+  for (const channel of summary.channels) {
+    for (const row of channel.rows) {
+      const existing = participantMap.get(row.userId);
+      if (!existing) {
+        participantMap.set(row.userId, {
+          username: row.username,
+          userId: row.userId,
+          enrollmentNo: row.enrollmentNo,
+          totalSeconds: row.totalSeconds,
+          totalSessions: row.totalSessions,
+          firstJoinIso: row.firstJoinIso,
+          lastLeaveIso: row.lastLeaveIso,
+          channels: new Set([channel.channelName])
+        });
+        continue;
+      }
+
+      existing.totalSeconds += row.totalSeconds;
+      existing.totalSessions += row.totalSessions;
+      existing.channels.add(channel.channelName);
+
+      const firstJoinTime = new Date(existing.firstJoinIso).getTime();
+      const rowFirstJoinTime = new Date(row.firstJoinIso).getTime();
+      if (!Number.isNaN(rowFirstJoinTime) && (Number.isNaN(firstJoinTime) || rowFirstJoinTime < firstJoinTime)) {
+        existing.firstJoinIso = row.firstJoinIso;
+      }
+
+      const lastLeaveTime = new Date(existing.lastLeaveIso).getTime();
+      const rowLastLeaveTime = new Date(row.lastLeaveIso).getTime();
+      if (!Number.isNaN(rowLastLeaveTime) && (Number.isNaN(lastLeaveTime) || rowLastLeaveTime > lastLeaveTime)) {
+        existing.lastLeaveIso = row.lastLeaveIso;
+      }
+    }
+  }
+
+  const participants: ParticipantAggregate[] = [...participantMap.values()]
+    .map((entry) => ({
+      username: entry.username,
+      userId: entry.userId,
+      enrollmentNo: entry.enrollmentNo,
+      totalSeconds: entry.totalSeconds,
+      totalDuration: formatDuration(entry.totalSeconds),
+      totalSessions: entry.totalSessions,
+      firstJoinIso: entry.firstJoinIso,
+      firstJoinDisplay: formatDateTime(entry.firstJoinIso),
+      lastLeaveIso: entry.lastLeaveIso,
+      lastLeaveDisplay: formatDateTime(entry.lastLeaveIso),
+      percentage: formatPercentage(entry.totalSeconds, summary.totalRunSeconds),
+      channelCount: entry.channels.size
+    }))
+    .sort((left, right) => right.totalSeconds - left.totalSeconds || left.username.localeCompare(right.username));
+
+  const topSeconds = participants[0]?.totalSeconds ?? 1;
+  const topSessions = Math.max(...participants.map((participant) => participant.totalSessions), 1);
+  const topChannelsTouched = Math.max(...participants.map((participant) => participant.channelCount), 1);
+  const topChannelTime = Math.max(
+    ...summary.channels.map((channel) =>
+      channel.rows.reduce((sum, row) => sum + row.totalSeconds, 0)
+    ),
+    1
+  );
+
+  const channels = summary.channels.map((channel) => {
+    const totalSeconds = channel.rows.reduce((sum, row) => sum + row.totalSeconds, 0);
+    return {
+      ...channel,
+      totalSeconds,
+      totalDuration: formatDuration(totalSeconds),
+      averageDuration:
+        channel.rows.length > 0 ? formatDuration(Math.round(totalSeconds / channel.rows.length)) : "00:00:00",
+      topBarWidth: `${Math.max(10, Math.round((totalSeconds / topChannelTime) * 100))}%`
+    };
+  });
+
+  const earliestArrivals = [...participants]
+    .filter((participant) => participant.firstJoinIso !== "Not set")
+    .sort((left, right) => new Date(left.firstJoinIso).getTime() - new Date(right.firstJoinIso).getTime())
+    .slice(0, 5);
+
+  const latestLeavers = [...participants]
+    .filter((participant) => participant.lastLeaveIso !== "Not set")
+    .sort((left, right) => new Date(right.lastLeaveIso).getTime() - new Date(left.lastLeaveIso).getTime())
+    .slice(0, 5);
+
+  return {
+    summary,
+    participants,
+    channels,
+    topAttendees: participants.slice(0, 5).map((participant) => ({
+      ...participant,
+      barWidth: `${Math.max(10, Math.round((participant.totalSeconds / topSeconds) * 100))}%`
+    })),
+    mostRejoined: [...participants]
+      .sort((left, right) => right.totalSessions - left.totalSessions || right.totalSeconds - left.totalSeconds)
+      .slice(0, 5)
+      .map((participant) => ({
+        ...participant,
+        barWidth: `${Math.max(10, Math.round((participant.totalSessions / topSessions) * 100))}%`
+      })),
+    explorers: [...participants]
+      .sort((left, right) => right.channelCount - left.channelCount || right.totalSeconds - left.totalSeconds)
+      .slice(0, 5)
+      .map((participant) => ({
+        ...participant,
+        barWidth: `${Math.max(10, Math.round((participant.channelCount / topChannelsTouched) * 100))}%`
+      })),
+    earliestArrivals,
+    latestLeavers,
+    totalParticipants: participants.length,
+    totalChannels: summary.channels.length,
+    totalRunDuration: formatDuration(summary.totalRunSeconds)
   };
 };
 
@@ -218,7 +367,7 @@ app.use(requireBasicAuth);
 
 app.get("/", (req, res) => {
   const runs = trackingRunRepository.list().map((run) => {
-    const channels = summarizeRunByChannel(run.id, run.started_at, run.ended_at).channels;
+    const analytics = buildRunAnalytics(run.id, run.started_at, run.ended_at);
 
     return {
       ...run,
@@ -227,11 +376,35 @@ app.get("/", (req, res) => {
       scheduled_end_display: formatDateTime(run.scheduled_end),
       started_display: formatDateTime(run.started_at),
       ended_display: formatDateTime(run.ended_at),
-      channels
+      total_channels: analytics.totalChannels,
+      total_participants: analytics.totalParticipants,
+      total_run_duration: analytics.totalRunDuration
     };
   });
 
   res.render("index", { runs, currentPage: "runs" });
+});
+
+app.get("/runs/:id", (req, res) => {
+  const run = trackingRunRepository.findById(Number(req.params.id));
+  if (!run) {
+    return res.status(404).send("Tracking run not found.");
+  }
+
+  const analytics = buildRunAnalytics(run.id, run.started_at, run.ended_at);
+
+  res.render("run-detail", {
+    currentPage: "runs",
+    run: {
+      ...run,
+      created_display: formatDateTime(run.created_at),
+      scheduled_start_display: formatDateTime(run.scheduled_start),
+      scheduled_end_display: formatDateTime(run.scheduled_end),
+      started_display: formatDateTime(run.started_at),
+      ended_display: formatDateTime(run.ended_at)
+    },
+    analytics
+  });
 });
 
 app.get("/users", (req, res) => {

@@ -53,12 +53,27 @@ body::before {
   background-size: 40px 40px;
   mask-image: radial-gradient(circle at center, black 45%, transparent 95%);
   opacity: 0.28;
+  animation: gridPulse 18s ease-in-out infinite alternate;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: -10%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(98, 230, 255, 0.08), transparent 24%),
+    radial-gradient(circle at 78% 30%, rgba(124, 92, 255, 0.08), transparent 26%),
+    radial-gradient(circle at 60% 85%, rgba(103, 240, 170, 0.06), transparent 24%);
+  filter: blur(24px);
+  animation: ambientShift 22s ease-in-out infinite alternate;
 }
 
 .page {
   width: min(1780px, calc(100% - 28px));
   margin: 0 auto;
   padding: 20px 0 72px;
+  animation: pageRise 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hero,
@@ -71,6 +86,12 @@ body::before {
   border-radius: 28px;
   box-shadow: var(--shadow), var(--glow);
   overflow: hidden;
+  transform: translateY(0);
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    background 220ms ease;
 }
 
 .hero::after,
@@ -87,6 +108,7 @@ body::before {
 .hero {
   padding: 36px;
   margin-bottom: 24px;
+  animation: fadeUp 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .hero-copy {
@@ -118,6 +140,25 @@ body::before {
   background: rgba(9, 15, 30, 0.78);
   border: 1px solid rgba(124, 92, 255, 0.18);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transform: translateY(0);
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    background 220ms ease;
+  animation: fadeUp 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mini-card:nth-child(1) {
+  animation-delay: 70ms;
+}
+
+.mini-card:nth-child(2) {
+  animation-delay: 130ms;
+}
+
+.mini-card:nth-child(3) {
+  animation-delay: 190ms;
 }
 
 .mini-card strong {
@@ -211,6 +252,7 @@ h3 {
 .card,
 .empty-state {
   padding: 28px;
+  animation: fadeUp 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .subcard {
@@ -218,6 +260,18 @@ h3 {
   padding: 20px;
   border-radius: 24px;
   background: linear-gradient(180deg, rgba(10, 17, 34, 0.9), rgba(6, 11, 24, 0.94));
+  animation: fadeUp 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.card:hover,
+.subcard:hover,
+.mini-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+  box-shadow:
+    0 24px 54px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(98, 230, 255, 0.18),
+    0 0 34px rgba(98, 230, 255, 0.12);
 }
 
 .card-header,
@@ -281,7 +335,12 @@ button {
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
-  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease;
 }
 
 .button-link {
@@ -293,7 +352,7 @@ button {
 
 .button-link:hover,
 button:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px) scale(1.01);
   box-shadow: 0 18px 42px rgba(10, 18, 30, 0.44);
 }
 
@@ -327,6 +386,7 @@ button:hover {
   color: #0f1f12;
   background: var(--success);
   box-shadow: 0 0 22px rgba(103, 240, 170, 0.34);
+  animation: livePulse 2.6s ease-in-out infinite;
 }
 
 .status.idle {
@@ -371,6 +431,7 @@ tbody tr:nth-child(even) {
 
 tbody tr:hover {
   background: rgba(98, 230, 255, 0.05);
+  transform: translateX(2px);
 }
 
 small {
@@ -395,6 +456,108 @@ small {
   border: 1px solid rgba(255, 255, 255, 0.07);
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.hero-actions .button-link,
+.actions .button-link {
+  animation: fadeUp 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.hero-actions .button-link:nth-child(1),
+.actions .button-link:nth-child(1) {
+  animation-delay: 120ms;
+}
+
+.hero-actions .button-link:nth-child(2),
+.actions .button-link:nth-child(2) {
+  animation-delay: 170ms;
+}
+
+.list > *:nth-child(1) {
+  animation-delay: 40ms;
+}
+
+.list > *:nth-child(2) {
+  animation-delay: 90ms;
+}
+
+.list > *:nth-child(3) {
+  animation-delay: 140ms;
+}
+
+.list > *:nth-child(4) {
+  animation-delay: 190ms;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pageRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ambientShift {
+  0% {
+    transform: translate3d(-1.5%, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(1%, -1.2%, 0) scale(1.03);
+  }
+
+  100% {
+    transform: translate3d(0.8%, 1.1%, 0) scale(1.02);
+  }
+}
+
+@keyframes gridPulse {
+  from {
+    opacity: 0.2;
+  }
+
+  to {
+    opacity: 0.34;
+  }
+}
+
+@keyframes livePulse {
+  0%,
+  100% {
+    box-shadow: 0 0 18px rgba(103, 240, 170, 0.24);
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 28px rgba(103, 240, 170, 0.44);
+    transform: scale(1.015);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @media (max-width: 1100px) {

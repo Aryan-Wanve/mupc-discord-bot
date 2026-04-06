@@ -52,6 +52,12 @@ export const statements = {
     FROM webinars
     WHERE id = ?
   `),
+  listWebinarsByGuild: db.prepare(`
+    SELECT *
+    FROM webinars
+    WHERE guild_id = ?
+    ORDER BY created_at DESC, id DESC
+  `),
   findActiveWebinarsForChannel: db.prepare(`
     SELECT *
     FROM webinars
@@ -125,6 +131,9 @@ export const webinarRepository = {
   },
   findById(id: number): WebinarRow | undefined {
     return statements.findWebinarById.get(id) as WebinarRow | undefined;
+  },
+  listByGuild(guildId: string): WebinarRow[] {
+    return statements.listWebinarsByGuild.all(guildId) as WebinarRow[];
   },
   findActiveByChannel(guildId: string, channelId: string): WebinarRow[] {
     return statements.findActiveWebinarsForChannel.all(guildId, channelId) as WebinarRow[];

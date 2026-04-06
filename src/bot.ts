@@ -2,12 +2,14 @@ import {
   ChannelType,
   Client,
   GatewayIntentBits,
+  Interaction,
   Partials,
   VoiceState
 } from "discord.js";
 import { config } from "./config";
 import { webinarRepository } from "./db";
 import { AttendanceTracker } from "./attendanceTracker";
+import { handleSlashCommand, registerSlashCommands } from "./commands";
 
 const tracker = new AttendanceTracker();
 
@@ -52,7 +54,20 @@ async function handleVoiceJoin(state: VoiceState) {
 discordClient.once("ready", async () => {
   await tracker.hydrateFromDatabase();
   await tracker.syncAllActiveWebinars(discordClient);
+  await registerSlashCommands([...discordClient.guilds.cache.keys()]);
   console.log(`Discord bot logged in as ${discordClient.user?.tag}`);
+});
+
+discordClient.on("guildCreate", async (guild) => {
+  await registerSlashCommands([guild.id]);
+});
+
+discordClient.on("interactionCreate", async (interaction: Interaction) => {
+  if (!interaction.isChatInputCommand()) {
+    return;
+  }
+
+  await handleSlashCommand(interaction);
 });
 
 discordClient.on("voiceStateUpdate", async (oldState, newState) => {

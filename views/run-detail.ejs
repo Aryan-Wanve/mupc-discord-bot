@@ -1,3 +1,4 @@
+<!-- Easter egg: Aryan left a little Oneway print here, hidden between the charts and the club stats. -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -11,11 +12,11 @@
       <section class="hero">
         <div class="hero-grid">
           <div class="hero-copy">
-            <p class="eyebrow">Run Analytics</p>
+            <p class="eyebrow">MUPC Workshop Analysis</p>
             <h1><%= run.title %></h1>
             <p class="intro">
-              Drill into voice-based engagement for this webinar: longest attendees, repeated joiners,
-              cross-channel explorers, earliest arrivals, latest leavers, and channel-level activity patterns.
+              Drill into voice-based engagement for this MUPC workshop: longest attendees, repeated joiners,
+              cross-channel explorers, earliest arrivals, latest leavers, and room-level activity patterns.
             </p>
             <div class="hero-actions">
               <a href="/" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
@@ -27,15 +28,15 @@
           <aside class="hero-side">
             <div class="mini-card">
               <strong><%= analytics.totalParticipants %></strong>
-              <span>Total attendees</span>
+              <span>Total club attendees</span>
             </div>
             <div class="mini-card">
               <strong><%= analytics.totalChannels %></strong>
-              <span>Active voice channels</span>
+              <span>Active workshop rooms</span>
             </div>
             <div class="mini-card">
               <strong><%= analytics.totalRunDuration %></strong>
-              <span>Run duration</span>
+              <span>Workshop duration</span>
             </div>
           </aside>
         </div>
@@ -47,7 +48,7 @@
             <div class="page-title-row">
               <div>
                 <p class="eyebrow">Run Meta</p>
-                <h2>Session overview</h2>
+                <h2>Workshop overview</h2>
               </div>
               <span class="muted-chip">Run #<%= run.id %></span>
             </div>
@@ -75,7 +76,7 @@
               </div>
               <div>
                 <dt>Voice Scope</dt>
-                <dd>All tracked voice channels in the server</dd>
+                <dd>All tracked MUPC voice spaces in the server</dd>
               </div>
             </dl>
           </section>
@@ -86,13 +87,13 @@
                 <p class="eyebrow">Leaderboards</p>
                 <h2>Voice engagement graphs</h2>
               </div>
-              <span class="muted-chip">Voice-based candidate signals</span>
+              <span class="muted-chip">Voice-based workshop signals</span>
             </div>
 
             <div class="analytics-grid">
               <section class="chart-card">
                 <h3>Top attendees</h3>
-                <p class="notes">Longest total voice presence in this webinar.</p>
+                <p class="notes">Longest total voice presence across this MUPC session.</p>
                 <div class="bar-list">
                   <% analytics.topAttendees.forEach((person) => { %>
                     <div class="bar-row">
@@ -111,7 +112,7 @@
 
               <section class="chart-card">
                 <h3>Most rejoined</h3>
-                <p class="notes">Users who came back repeatedly during the session.</p>
+                <p class="notes">Members who came back repeatedly during the workshop.</p>
                 <div class="bar-list">
                   <% analytics.mostRejoined.forEach((person) => { %>
                     <div class="bar-row">
@@ -130,7 +131,7 @@
 
               <section class="chart-card">
                 <h3>Cross-channel explorers</h3>
-                <p class="notes">People who touched the most voice spaces during the run.</p>
+                <p class="notes">Members who moved across the most club voice spaces.</p>
                 <div class="bar-list">
                   <% analytics.explorers.forEach((person) => { %>
                     <div class="bar-row">
@@ -149,7 +150,7 @@
 
               <section class="chart-card">
                 <h3>Busiest channels</h3>
-                <p class="notes">Total accumulated attendance time by channel.</p>
+                <p class="notes">Total accumulated attendance time by workshop room.</p>
                 <div class="bar-list">
                   <% analytics.channels.forEach((channel) => { %>
                     <div class="bar-row">
@@ -171,14 +172,14 @@
           <section class="card">
             <div class="page-title-row">
               <div>
-                <p class="eyebrow">Channel Breakdown</p>
-                <h2>Per-channel participation</h2>
+                <p class="eyebrow">Room Breakdown</p>
+                <h2>Per-room participation</h2>
               </div>
               <span class="muted-chip">Detailed voice rollup</span>
             </div>
 
             <% if (analytics.channels.length === 0) { %>
-              <p class="empty-inline">No voice activity captured for this run.</p>
+              <p class="empty-inline">No voice activity was captured for this workshop.</p>
             <% } else { %>
               <section class="list">
                 <% analytics.channels.forEach((channel) => { %>
@@ -261,10 +262,10 @@
 
           <section class="card">
             <p class="eyebrow">Interpretation</p>
-            <h2>Candidate insight lens</h2>
+            <h2>Club insight lens</h2>
             <p class="intro">
               This page currently measures voice attendance behavior, not text chat. It is best for spotting
-              listeners who show up early, stay long, come back repeatedly, or explore multiple discussion spaces.
+              members who show up early, stay long, come back repeatedly, or explore multiple discussion spaces during MUPC workshops.
             </p>
           </section>
         </aside>

@@ -24,6 +24,34 @@
       </section>
 
       <section class="card">
+        <h2>Registered users</h2>
+        <% if (registrations.length === 0) { %>
+          <p class="empty-inline">No users have registered an enrollment number yet.</p>
+        <% } else { %>
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Enrollment No</th>
+                <th>Registered</th>
+                <th>Last updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% registrations.forEach((user) => { %>
+                <tr>
+                  <td><strong><%= user.username %></strong><br /><small><%= user.user_id %></small></td>
+                  <td><%= user.enrollment_no %></td>
+                  <td><%= user.registered_display %></td>
+                  <td><%= user.updated_display %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </section>
+
+      <section class="card">
         <h2>User totals</h2>
         <% if (users.length === 0) { %>
           <p class="empty-inline">No tracked users yet.</p>
@@ -32,6 +60,7 @@
             <thead>
               <tr>
                 <th>User</th>
+                <th>Enrollment No</th>
                 <th>Total tracked time</th>
                 <th>Session count</th>
               </tr>
@@ -40,6 +69,7 @@
               <% users.forEach((user) => { %>
                 <tr>
                   <td><strong><%= user.username %></strong><br /><small><%= user.user_id %></small></td>
+                  <td><%= user.enrollment_no || "Not registered" %></td>
                   <td><%= user.total_display %></td>
                   <td><%= user.session_count %></td>
                 </tr>
@@ -60,6 +90,7 @@
                 <th>Run</th>
                 <th>Channel</th>
                 <th>User</th>
+                <th>Enrollment No</th>
                 <th>Joined</th>
                 <th>Left</th>
               </tr>
@@ -70,6 +101,7 @@
                   <td>#<%= session.tracking_run_id %></td>
                   <td><%= session.channel_name %><br /><small><%= session.channel_id %></small></td>
                   <td><strong><%= session.username %></strong><br /><small><%= session.user_id %></small></td>
+                  <td><%= session.enrollment_no %></td>
                   <td><%= session.joined_display %></td>
                   <td><%= session.left_display %></td>
                 </tr>

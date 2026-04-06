@@ -5,6 +5,7 @@ import {
   Guild,
   GuildBasedChannel,
   Interaction,
+  PermissionFlagsBits,
   Partials,
   TextChannel,
   VoiceBasedChannel,
@@ -32,6 +33,41 @@ export const discordClient = new Client({
 const getDisplayName = (state: VoiceState) =>
   state.member?.user.globalName ?? state.member?.user.username ?? state.id;
 
+async function logGuildDiagnostics(guild: Guild) {
+  const me = await guild.members.fetchMe().catch(() => null);
+  if (!me) {
+    console.warn(`[Guild Check] ${guild.name} (${guild.id}) -> Could not fetch bot member.`);
+    return;
+  }
+
+  const permissions = me.permissions;
+  const existingLogChannel = guild.channels.cache.find(
+    (channel) => channel.type === ChannelType.GuildText && channel.name === logChannelName
+  );
+
+  const canViewExistingLog =
+    existingLogChannel?.isTextBased() && existingLogChannel.viewable ? "yes" : "no";
+  const canSendExistingLog =
+    existingLogChannel?.isTextBased() &&
+    existingLogChannel.permissionsFor(me)?.has(PermissionFlagsBits.SendMessages)
+      ? "yes"
+      : "no";
+
+  console.log(
+    [
+      `[Guild Check] ${guild.name} (${guild.id})`,
+      `admin=${permissions.has(PermissionFlagsBits.Administrator)}`,
+      `manageChannels=${permissions.has(PermissionFlagsBits.ManageChannels)}`,
+      `viewChannel=${permissions.has(PermissionFlagsBits.ViewChannel)}`,
+      `sendMessages=${permissions.has(PermissionFlagsBits.SendMessages)}`,
+      `voiceConnect=${permissions.has(PermissionFlagsBits.Connect)}`,
+      `logChannel=${existingLogChannel ? existingLogChannel.name : "missing"}`,
+      `logView=${canViewExistingLog}`,
+      `logSend=${canSendExistingLog}`
+    ].join(" | ")
+  );
+}
+
 const isTrackableVoiceChannel = (channel: GuildBasedChannel | null): channel is VoiceBasedChannel =>
   Boolean(channel && channel.isVoiceBased());
 
@@ -44,11 +80,19 @@ async function ensureLogChannel(guild: Guild) {
     return existing as TextChannel;
   }
 
-  return guild.channels.create({
-    name: logChannelName,
-    type: ChannelType.GuildText,
-    topic: "Automatic tracking logs and attendance run updates."
-  });
+  try {
+    return await guild.channels.create({
+      name: logChannelName,
+      type: ChannelType.GuildText,
+      topic: "Automatic tracking logs and attendance run updates."
+    });
+  } catch (error) {
+    console.warn(
+      `Could not create ${logChannelName} in guild ${guild.id}. ` +
+        `${error instanceof Error ? error.message : "Unknown error"}`
+    );
+    return null;
+  }
 }
 
 async function sendGuildLog(guildId: string, message: string) {
@@ -182,6 +226,7 @@ discordClient.once("ready", async () => {
 
   for (const guild of discordClient.guilds.cache.values()) {
     await guild.channels.fetch();
+    await logGuildDiagnostics(guild);
     await ensureLogChannel(guild);
   }
 
@@ -201,6 +246,7 @@ discordClient.once("ready", async () => {
 
 discordClient.on("guildCreate", async (guild) => {
   await guild.channels.fetch();
+  await logGuildDiagnostics(guild);
   await ensureLogChannel(guild);
   await registerSlashCommands([guild.id]);
 });

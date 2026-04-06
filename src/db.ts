@@ -203,50 +203,50 @@ const statements = {
   `),
   listChannelSummariesByRun: db.prepare(`
     SELECT
-      channel_id,
-      channel_name,
-      COUNT(DISTINCT user_id) AS participant_count
+      tracking_sessions.channel_id AS channel_id,
+      tracking_sessions.channel_name AS channel_name,
+      COUNT(DISTINCT tracking_sessions.user_id) AS participant_count
     FROM tracking_sessions
-    WHERE tracking_run_id = ?
-    GROUP BY channel_id, channel_name
-    ORDER BY channel_name COLLATE NOCASE ASC
+    WHERE tracking_sessions.tracking_run_id = ?
+    GROUP BY tracking_sessions.channel_id, tracking_sessions.channel_name
+    ORDER BY tracking_sessions.channel_name COLLATE NOCASE ASC
   `),
   reportByRunAndChannel: db.prepare(`
     SELECT
-      channel_id,
-      channel_name,
-      user_id,
+      tracking_sessions.channel_id AS channel_id,
+      tracking_sessions.channel_name AS channel_name,
+      tracking_sessions.user_id AS user_id,
       MAX(tracking_sessions.username) AS username,
       registered_users.enrollment_no AS enrollment_no,
-      CAST(SUM(MAX(0, strftime('%s', COALESCE(left_at, CURRENT_TIMESTAMP)) - strftime('%s', joined_at))) AS INTEGER) AS total_seconds,
+      CAST(SUM(MAX(0, strftime('%s', COALESCE(tracking_sessions.left_at, CURRENT_TIMESTAMP)) - strftime('%s', tracking_sessions.joined_at))) AS INTEGER) AS total_seconds,
       GROUP_CONCAT(
-        joined_at || ' -> ' || COALESCE(left_at, 'ACTIVE'),
+        tracking_sessions.joined_at || ' -> ' || COALESCE(tracking_sessions.left_at, 'ACTIVE'),
         ' | '
       ) AS sessions
     FROM tracking_sessions
     LEFT JOIN registered_users ON registered_users.user_id = tracking_sessions.user_id
-    WHERE tracking_run_id = ?
-      AND channel_id = ?
-    GROUP BY channel_id, channel_name, user_id, registered_users.enrollment_no
+    WHERE tracking_sessions.tracking_run_id = ?
+      AND tracking_sessions.channel_id = ?
+    GROUP BY tracking_sessions.channel_id, tracking_sessions.channel_name, tracking_sessions.user_id, registered_users.enrollment_no
     ORDER BY total_seconds DESC, username COLLATE NOCASE ASC
   `),
   fullReportByRun: db.prepare(`
     SELECT
-      channel_id,
-      channel_name,
-      user_id,
+      tracking_sessions.channel_id AS channel_id,
+      tracking_sessions.channel_name AS channel_name,
+      tracking_sessions.user_id AS user_id,
       MAX(tracking_sessions.username) AS username,
       registered_users.enrollment_no AS enrollment_no,
-      CAST(SUM(MAX(0, strftime('%s', COALESCE(left_at, CURRENT_TIMESTAMP)) - strftime('%s', joined_at))) AS INTEGER) AS total_seconds,
+      CAST(SUM(MAX(0, strftime('%s', COALESCE(tracking_sessions.left_at, CURRENT_TIMESTAMP)) - strftime('%s', tracking_sessions.joined_at))) AS INTEGER) AS total_seconds,
       GROUP_CONCAT(
-        joined_at || ' -> ' || COALESCE(left_at, 'ACTIVE'),
+        tracking_sessions.joined_at || ' -> ' || COALESCE(tracking_sessions.left_at, 'ACTIVE'),
         ' | '
       ) AS sessions
     FROM tracking_sessions
     LEFT JOIN registered_users ON registered_users.user_id = tracking_sessions.user_id
-    WHERE tracking_run_id = ?
-    GROUP BY channel_id, channel_name, user_id, registered_users.enrollment_no
-    ORDER BY channel_name COLLATE NOCASE ASC, total_seconds DESC, username COLLATE NOCASE ASC
+    WHERE tracking_sessions.tracking_run_id = ?
+    GROUP BY tracking_sessions.channel_id, tracking_sessions.channel_name, tracking_sessions.user_id, registered_users.enrollment_no
+    ORDER BY tracking_sessions.channel_name COLLATE NOCASE ASC, total_seconds DESC, username COLLATE NOCASE ASC
   `),
   listAllSessions: db.prepare(`
     SELECT *

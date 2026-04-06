@@ -1,3 +1,4 @@
+<!-- Easter egg: MUPC layouts carry a quiet Oneway signature for anyone reading source at midnight. -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -11,11 +12,11 @@
       <section class="hero">
         <div class="hero-grid">
           <div class="hero-copy">
-            <p class="eyebrow">Discord Attendance Tracker</p>
-            <h1>Runs overview with exports and deep analytics.</h1>
+            <p class="eyebrow">Medi-Caps University Photography Club</p>
+            <h1>MUPC workshop attendance, framed for quick review.</h1>
             <p class="intro">
-              Keep the main dashboard clean, then open each webinar to inspect voice engagement,
-              candidate behavior, channel performance, and attendance trends in detail.
+              Track photography, videography, editing, and media workshops with a cleaner club-facing
+              overview, then open each session for deeper attendance and engagement analysis.
             </p>
             <div class="hero-actions">
               <a href="/" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
@@ -26,7 +27,7 @@
           <aside class="hero-side">
             <div class="mini-card">
               <strong><%= runs.length %></strong>
-              <span>Total webinars</span>
+              <span>Total MUPC workshops</span>
             </div>
             <div class="mini-card">
               <strong><%= runs.filter((run) => run.is_active).length %></strong>
@@ -46,15 +47,15 @@
             <div class="page-title-row">
               <div>
                 <p class="eyebrow">Overview</p>
-                <h2>Webinar runs</h2>
+                <h2>Workshop archive</h2>
               </div>
-              <span class="muted-chip">Compact view with drill-down pages</span>
+              <span class="muted-chip">Clean archive with drill-down pages</span>
             </div>
 
             <% if (runs.length === 0) { %>
               <div class="empty-state">
-                <h2>No tracking runs yet</h2>
-                <p>Use <strong>/tracking start</strong> or <strong>/tracking schedule</strong> in Discord to create one.</p>
+                <h2>No MUPC workshops tracked yet</h2>
+                <p>Use <strong>/tracking start</strong> or <strong>/tracking schedule</strong> in Discord when the next session begins.</p>
               </div>
             <% } else { %>
               <section class="run-grid">
@@ -107,7 +108,7 @@
         <aside class="stack">
           <section class="card">
             <p class="eyebrow">Insight Panels</p>
-            <h2>What the detail page shows</h2>
+            <h2>What the workshop page shows</h2>
             <div class="stats-grid">
               <div class="stat-box">
                 <div class="stat-label">Top Attendees</div>
@@ -130,10 +131,10 @@
 
           <section class="card">
             <p class="eyebrow">Note</p>
-            <h2>Candidate insight scope</h2>
+            <h2>Club insight scope</h2>
             <p class="intro">
-              The current analytics page is based on voice attendance only. It highlights consistent
-              listeners, rejoin behavior, presence length, and cross-channel activity to help identify interested candidates.
+              The current analytics page is voice-first. It highlights committed listeners, repeat joiners,
+              long stays, and cross-channel movement to help MUPC spot interested members after each workshop.
             </p>
           </section>
         </aside>

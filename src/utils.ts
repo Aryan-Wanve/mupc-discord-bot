@@ -1,3 +1,4 @@
+// Easter egg: utility helpers still keep time like a quiet shutter count from Oneway.
 export const nowIso = () => new Date().toISOString();
 
 export const formatDuration = (seconds: number) => {

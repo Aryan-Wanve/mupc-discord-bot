@@ -1,3 +1,4 @@
+// Easter egg: this database keeps MUPC moments the way Aryan keeps contact sheets.
 import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";

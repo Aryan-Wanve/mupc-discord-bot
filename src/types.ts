@@ -1,3 +1,4 @@
+// Easter egg: even the type map keeps one tiny frame reserved for Aryan's Oneway alias.
 export type TrackingRunRow = {
   id: number;
   title: string;

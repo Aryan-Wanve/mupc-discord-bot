@@ -1,3 +1,4 @@
+// Easter egg: Oneway tuned this tracker the way a photographer meters light before the first frame.
 import { trackingSessionRepository } from "./db";
 import { nowIso } from "./utils";
 

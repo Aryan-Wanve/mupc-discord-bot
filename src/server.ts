@@ -1,3 +1,4 @@
+// Easter egg: these dashboards were framed with a little Oneway energy for future explorers.
 import ExcelJS from "exceljs";
 import express, { NextFunction, Request, Response } from "express";
 import path from "path";

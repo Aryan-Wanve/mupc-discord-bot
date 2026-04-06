@@ -1,46 +1,53 @@
-import { Client, VoiceBasedChannel } from "discord.js";
-import { attendanceRepository, webinarRepository } from "./db";
+import { trackingSessionRepository } from "./db";
 import { nowIso } from "./utils";
 
-const makeSessionKey = (webinarId: number, userId: string) => `${webinarId}:${userId}`;
+const makeSessionKey = (runId: number, userId: string) => `${runId}:${userId}`;
 
 export class AttendanceTracker {
-  private openSessions = new Set<string>();
+  private openSessions = new Map<string, string>();
 
-  async hydrateFromDatabase() {
-    for (const webinar of webinarRepository.list().filter((row) => row.is_active === 1)) {
-      for (const session of attendanceRepository.listByWebinar(webinar.id)) {
-        if (!session.left_at) {
-          this.openSessions.add(makeSessionKey(webinar.id, session.user_id));
-        }
-      }
+  hydrateFromDatabase() {
+    this.openSessions.clear();
+
+    for (const session of trackingSessionRepository.listOpenForActiveRuns()) {
+      this.openSessions.set(makeSessionKey(session.tracking_run_id, session.user_id), session.channel_id);
     }
   }
 
-  startTracking(webinarId: number, userId: string, username: string) {
-    const key = makeSessionKey(webinarId, userId);
+  startTracking(input: {
+    runId: number;
+    guildId: string;
+    channelId: string;
+    channelName: string;
+    userId: string;
+    username: string;
+  }) {
+    const key = makeSessionKey(input.runId, input.userId);
     if (this.openSessions.has(key)) {
       return false;
     }
 
-    attendanceRepository.createSession({
-      webinarId,
-      userId,
-      username,
+    trackingSessionRepository.create({
+      trackingRunId: input.runId,
+      guildId: input.guildId,
+      channelId: input.channelId,
+      channelName: input.channelName,
+      userId: input.userId,
+      username: input.username,
       joinedAt: nowIso()
     });
-    this.openSessions.add(key);
+    this.openSessions.set(key, input.channelId);
     return true;
   }
 
-  stopTracking(webinarId: number, userId: string) {
-    const key = makeSessionKey(webinarId, userId);
+  stopTracking(runId: number, userId: string) {
+    const key = makeSessionKey(runId, userId);
     if (!this.openSessions.has(key)) {
       return false;
     }
 
-    attendanceRepository.closeSession({
-      webinarId,
+    trackingSessionRepository.close({
+      trackingRunId: runId,
       userId,
       leftAt: nowIso()
     });
@@ -48,31 +55,40 @@ export class AttendanceTracker {
     return true;
   }
 
-  stopTrackingForWebinar(webinarId: number) {
-    attendanceRepository.closeAllOpenSessionsForWebinar({
-      webinarId,
+  switchChannel(input: {
+    runId: number;
+    guildId: string;
+    userId: string;
+    username: string;
+    oldChannelId?: string | null;
+    newChannelId?: string | null;
+    newChannelName?: string | null;
+  }) {
+    if (input.oldChannelId) {
+      this.stopTracking(input.runId, input.userId);
+    }
+
+    if (input.newChannelId && input.newChannelName) {
+      this.startTracking({
+        runId: input.runId,
+        guildId: input.guildId,
+        channelId: input.newChannelId,
+        channelName: input.newChannelName,
+        userId: input.userId,
+        username: input.username
+      });
+    }
+  }
+
+  stopTrackingForRun(runId: number) {
+    trackingSessionRepository.closeAllForRun({
+      trackingRunId: runId,
       leftAt: nowIso()
     });
 
-    for (const key of this.openSessions) {
-      if (key.startsWith(`${webinarId}:`)) {
+    for (const key of this.openSessions.keys()) {
+      if (key.startsWith(`${runId}:`)) {
         this.openSessions.delete(key);
-      }
-    }
-  }
-
-  syncCurrentChannelMembers(webinarId: number, channel: VoiceBasedChannel) {
-    for (const [memberId, member] of channel.members) {
-      const displayName = member.user.globalName ?? member.user.username;
-      this.startTracking(webinarId, memberId, displayName);
-    }
-  }
-
-  async syncAllActiveWebinars(client: Client) {
-    for (const webinar of webinarRepository.list().filter((row) => row.is_active === 1)) {
-      const channel = await client.channels.fetch(webinar.channel_id).catch(() => null);
-      if (channel && channel.isVoiceBased()) {
-        this.syncCurrentChannelMembers(webinar.id, channel);
       }
     }
   }

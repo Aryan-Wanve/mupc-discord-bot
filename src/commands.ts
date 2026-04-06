@@ -53,7 +53,11 @@ const webinarCommand = new SlashCommandBuilder()
     subcommand.setName("list").setDescription("List recent webinars for this server.")
   );
 
-const commands = [webinarCommand];
+const pingCommand = new SlashCommandBuilder()
+  .setName("ping")
+  .setDescription("Check whether the bot is responding.");
+
+const commands = [pingCommand, webinarCommand];
 
 const ensureAdminAccess = async (interaction: ChatInputCommandInteraction) => {
   if (!interaction.inCachedGuild()) {
@@ -203,6 +207,14 @@ export async function registerSlashCommands(guildIds: string[]) {
 }
 
 export async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
+  if (interaction.commandName === "ping") {
+    await interaction.reply({
+      content: "Pong! The bot is online and slash commands are working.",
+      ephemeral: true
+    });
+    return;
+  }
+
   if (interaction.commandName !== "webinar") {
     return;
   }

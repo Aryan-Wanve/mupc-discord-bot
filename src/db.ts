@@ -209,6 +209,21 @@ const statements = {
     WHERE tracking_run_id = ?
     GROUP BY channel_id, channel_name, user_id, username
     ORDER BY channel_name COLLATE NOCASE ASC, total_seconds DESC, username COLLATE NOCASE ASC
+  `),
+  listAllSessions: db.prepare(`
+    SELECT *
+    FROM tracking_sessions
+    ORDER BY joined_at DESC, id DESC
+  `),
+  listUserSummaries: db.prepare(`
+    SELECT
+      user_id,
+      username,
+      CAST(SUM(MAX(0, strftime('%s', COALESCE(left_at, CURRENT_TIMESTAMP)) - strftime('%s', joined_at))) AS INTEGER) AS total_seconds,
+      COUNT(*) AS session_count
+    FROM tracking_sessions
+    GROUP BY user_id, username
+    ORDER BY total_seconds DESC, username COLLATE NOCASE ASC
   `)
 };
 
@@ -301,5 +316,21 @@ export const trackingSessionRepository = {
   },
   fullReportByRun(runId: number): ChannelAttendanceReportRow[] {
     return statements.fullReportByRun.all(runId) as ChannelAttendanceReportRow[];
+  },
+  listAll(): TrackingSessionRow[] {
+    return statements.listAllSessions.all() as TrackingSessionRow[];
+  },
+  listUserSummaries(): Array<{
+    user_id: string;
+    username: string;
+    total_seconds: number;
+    session_count: number;
+  }> {
+    return statements.listUserSummaries.all() as Array<{
+      user_id: string;
+      username: string;
+      total_seconds: number;
+      session_count: number;
+    }>;
   }
 };

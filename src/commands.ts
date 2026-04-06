@@ -6,6 +6,7 @@ import {
   SlashCommandBuilder
 } from "discord.js";
 import { config } from "./config";
+import { registeredUserRepository } from "./db";
 import {
   getTrackingStatusForGuild,
   scheduleTrackingForGuild,
@@ -17,6 +18,17 @@ import { parseTodayTimeRange } from "./utils";
 const pingCommand = new SlashCommandBuilder()
   .setName("ping")
   .setDescription("Check whether the bot is responding.");
+
+const registerCommand = new SlashCommandBuilder()
+  .setName("register")
+  .setDescription("Register your enrollment number for attendance exports.")
+  .addStringOption((option) =>
+    option
+      .setName("enrollmentno")
+      .setDescription("Your enrollment number")
+      .setRequired(true)
+      .setMaxLength(50)
+  );
 
 const trackingCommand = new SlashCommandBuilder()
   .setName("tracking")
@@ -63,7 +75,7 @@ const trackingCommand = new SlashCommandBuilder()
     subcommand.setName("status").setDescription("Show the active run and recent runs for this server.")
   );
 
-const commands = [pingCommand, trackingCommand];
+const commands = [pingCommand, registerCommand, trackingCommand];
 
 const ensureStaffAccess = async (interaction: ChatInputCommandInteraction) => {
   if (!interaction.inCachedGuild()) {
@@ -194,6 +206,43 @@ async function handleStatus(interaction: ChatInputCommandInteraction) {
   });
 }
 
+async function handleRegister(interaction: ChatInputCommandInteraction) {
+  const enrollmentNo = interaction.options.getString("enrollmentno", true).trim();
+  const userId = interaction.user.id;
+  const username = interaction.user.globalName ?? interaction.user.username;
+
+  const existingForUser = registeredUserRepository.findByUserId(userId);
+  if (existingForUser) {
+    await interaction.reply({
+      content:
+        `You are already registered with enrollment number **${existingForUser.enrollment_no}**.`,
+      ephemeral: true
+    });
+    return;
+  }
+
+  const existingForEnrollment = registeredUserRepository.findByEnrollment(enrollmentNo);
+  if (existingForEnrollment) {
+    await interaction.reply({
+      content: "That enrollment number is already registered to another Discord user.",
+      ephemeral: true
+    });
+    return;
+  }
+
+  const registered = registeredUserRepository.upsert({
+    userId,
+    username,
+    enrollmentNo
+  });
+
+  await interaction.reply({
+    content:
+      `Registered successfully. Your enrollment number is now saved as **${registered?.enrollment_no ?? enrollmentNo}**.`,
+    ephemeral: true
+  });
+}
+
 export async function registerSlashCommands(guildIds: string[]) {
   if (guildIds.length === 0) {
     return;
@@ -216,6 +265,11 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
         content: "Pong! The bot is online and slash commands are working.",
         ephemeral: true
       });
+      return;
+    }
+
+    if (interaction.commandName === "register") {
+      await handleRegister(interaction);
       return;
     }
 

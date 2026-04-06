@@ -20,6 +20,7 @@
             <div class="hero-actions">
               <a href="/" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
               <a href="/users" class="button-link <%= currentPage === "users" ? "is-active" : "secondary-link" %>">Users DB</a>
+              <a href="/users/export.csv" class="button-link">Download Users CSV</a>
             </div>
           </div>
 
@@ -123,8 +124,13 @@
 
         <aside class="stack">
           <section class="card">
-            <p class="eyebrow">Totals</p>
-            <h2>User attendance summary</h2>
+            <div class="page-title-row">
+              <div>
+                <p class="eyebrow">Totals</p>
+                <h2>User attendance summary</h2>
+              </div>
+              <span class="muted-chip">Cross-webinar candidate summary</span>
+            </div>
             <% if (users.length === 0) { %>
               <p class="empty-inline">No tracked users yet.</p>
             <% } else { %>
@@ -134,6 +140,8 @@
                     <tr>
                       <th>User</th>
                       <th>Enrollment No</th>
+                      <th>Workshops Joined</th>
+                      <th>Avg % Attended</th>
                       <th>Total tracked time</th>
                       <th>Session count</th>
                     </tr>
@@ -141,10 +149,12 @@
                   <tbody>
                     <% users.forEach((user) => { %>
                       <tr>
-                        <td><strong><%= user.username %></strong><br /><small><%= user.user_id %></small></td>
-                        <td><%= user.enrollment_no || "Not registered" %></td>
-                        <td><%= user.total_display %></td>
-                        <td><%= user.session_count %></td>
+                        <td><strong><%= user.username %></strong><br /><small><%= user.userId %></small></td>
+                        <td><%= user.enrollmentNo %></td>
+                        <td><%= user.totalRunsJoined %></td>
+                        <td><%= user.averagePercentage %></td>
+                        <td><%= user.totalDuration %></td>
+                        <td><%= user.totalSessions %></td>
                       </tr>
                     <% }) %>
                   </tbody>
@@ -168,6 +178,14 @@
               <div class="stat-box">
                 <div class="stat-label">Duplicate Handling</div>
                 <div class="stat-value">Blocked</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">User Export</div>
+                <div class="stat-value">CSV Ready</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Analytics</div>
+                <div class="stat-value">Cross-run</div>
               </div>
             </div>
           </section>

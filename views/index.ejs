@@ -60,36 +60,42 @@
               <section class="run-grid">
                 <% runs.forEach((run) => { %>
                   <article class="run-card">
-                    <div class="card-header">
-                      <div>
-                        <p class="eyebrow">Run #<%= run.id %></p>
-                        <h3><%= run.title %></h3>
-                      </div>
-                      <span class="status <%= run.is_active ? "live" : "idle" %>"><%= run.status %></span>
-                    </div>
-
-                    <div class="stats-grid compact-stats">
-                      <div class="stat-box">
-                        <div class="stat-label">Participants</div>
-                        <div class="stat-value"><%= run.total_participants %></div>
-                      </div>
-                      <div class="stat-box">
-                        <div class="stat-label">Channels</div>
-                        <div class="stat-value"><%= run.total_channels %></div>
-                      </div>
-                      <div class="stat-box">
-                        <div class="stat-label">Duration</div>
-                        <div class="stat-value"><%= run.total_run_duration %></div>
-                      </div>
-                      <div class="stat-box">
-                        <div class="stat-label">Started</div>
-                        <div class="stat-value small-stat"><%= run.started_display %></div>
+                    <div class="run-shell run-shell-header">
+                      <div class="card-header">
+                        <div>
+                          <p class="eyebrow">Run #<%= run.id %></p>
+                          <h3><%= run.title %></h3>
+                        </div>
+                        <span class="status <%= run.is_active ? "live" : "idle" %>"><%= run.status %></span>
                       </div>
                     </div>
 
-                    <div class="actions">
-                      <a href="/runs/<%= run.id %>/export.xlsx" class="button-link">Download Excel</a>
-                      <a href="/runs/<%= run.id %>" class="button-link secondary-link">Show More</a>
+                    <div class="run-shell run-shell-metrics">
+                      <div class="stats-grid compact-stats">
+                        <div class="stat-box">
+                          <div class="stat-label">Participants</div>
+                          <div class="stat-value"><%= run.total_participants %></div>
+                        </div>
+                        <div class="stat-box">
+                          <div class="stat-label">Channels</div>
+                          <div class="stat-value"><%= run.total_channels %></div>
+                        </div>
+                        <div class="stat-box">
+                          <div class="stat-label">Duration</div>
+                          <div class="stat-value"><%= run.total_run_duration %></div>
+                        </div>
+                        <div class="stat-box">
+                          <div class="stat-label">Started</div>
+                          <div class="stat-value small-stat"><%= run.started_display %></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="run-shell run-shell-actions">
+                      <div class="actions">
+                        <a href="/runs/<%= run.id %>/export.xlsx" class="button-link">Download Excel</a>
+                        <a href="/runs/<%= run.id %>" class="button-link secondary-link">Show More</a>
+                      </div>
                     </div>
                   </article>
                 <% }) %>

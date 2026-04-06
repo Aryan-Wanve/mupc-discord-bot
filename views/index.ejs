@@ -11,10 +11,10 @@
       <section class="hero">
         <div>
           <p class="eyebrow">Discord Attendance Tracker</p>
-          <h1>Whole-server tracking runs with per-channel CSV exports.</h1>
+          <h1>Whole-server tracking runs with per-channel Excel sheets.</h1>
           <p class="intro">
             Start tracking from Discord, let the bot capture attendance across every voice channel,
-            and use this dashboard to download one CSV per VC or a full export for the entire run.
+            and use this dashboard to download one Excel workbook where each VC becomes its own sheet.
           </p>
           <div class="actions">
             <a href="/" class="button-link">Runs</a>
@@ -61,7 +61,7 @@
             </dl>
 
             <div class="actions">
-              <a href="/runs/<%= run.id %>/export.csv" class="button-link">Download full CSV</a>
+              <a href="/runs/<%= run.id %>/export.xlsx" class="button-link">Download Excel</a>
             </div>
 
             <div class="report">
@@ -74,27 +74,26 @@
                     <div class="card-header">
                       <div>
                         <h3><%= channel.channel_name %></h3>
-                        <p class="notes"><%= channel.participant_count %> participant(s)</p>
+                        <p class="notes"><%= channel.rows.length %> participant(s)</p>
                       </div>
-                      <a href="/runs/<%= run.id %>/channels/<%= channel.channel_id %>/export.csv" class="button-link">
-                        Channel CSV
-                      </a>
                     </div>
 
                     <table>
                       <thead>
                         <tr>
                           <th>User</th>
-                          <th>Total time</th>
-                          <th>Marked timings</th>
+                          <th>Total duration</th>
+                          <th>Percentage</th>
+                          <th>Sessions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <% channel.report.forEach((entry) => { %>
+                        <% channel.rows.forEach((entry) => { %>
                           <tr>
-                            <td><strong><%= entry.username %></strong><br /><small><%= entry.user_id %></small></td>
-                            <td><%= entry.total_display %></td>
-                            <td><%= entry.sessions %></td>
+                            <td><strong><%= entry.username %></strong><br /><small><%= entry.userId %></small></td>
+                            <td><%= entry.totalDuration %></td>
+                            <td><%= entry.percentage %></td>
+                            <td><%= entry.totalSessions %></td>
                           </tr>
                         <% }) %>
                       </tbody>

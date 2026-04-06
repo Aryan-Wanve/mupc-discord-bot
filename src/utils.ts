@@ -62,3 +62,11 @@ export const formatDateTime = (value: string | null) => {
     hour12: true
   });
 };
+
+export const formatPercentage = (numerator: number, denominator: number) => {
+  if (denominator <= 0) {
+    return "0.00%";
+  }
+
+  return `${((numerator / denominator) * 100).toFixed(2)}%`;
+};

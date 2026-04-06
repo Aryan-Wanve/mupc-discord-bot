@@ -23,6 +23,14 @@ export type TrackingSessionRow = {
   left_at: string | null;
 };
 
+export type RegisteredUserRow = {
+  user_id: string;
+  username: string;
+  enrollment_no: string;
+  registered_at: string;
+  updated_at: string;
+};
+
 export type ChannelSummaryRow = {
   channel_id: string;
   channel_name: string;
@@ -34,6 +42,7 @@ export type ChannelAttendanceReportRow = {
   channel_name: string;
   user_id: string;
   username: string;
+  enrollment_no: string | null;
   total_seconds: number;
   sessions: string;
 };

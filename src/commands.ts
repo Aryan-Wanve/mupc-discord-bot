@@ -192,7 +192,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Member Command",
                 value:
-                  "`/register enrollmentno:<student enrollment number>`\nLinks a Discord user to an enrollment number for exports."
+                  "`/register enrollmentno:<student enrollment number>`\nLinks a Discord user to an enrollment number for this server's exports."
               },
               {
                 name: "Admin Commands",
@@ -215,7 +215,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Commands You Need",
                 value:
-                  "`/register enrollmentno:<your enrollment number>`\nRegister once so your attendance is matched correctly.\n\n`/help`\nShows this guide."
+                  "`/register enrollmentno:<your enrollment number>`\nRegister for this server so your attendance is matched correctly.\n\n`/help`\nShows this guide."
               },
               {
                 name: "How Attendance Works",
@@ -225,7 +225,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "If A Workshop Is Scheduled",
                 value:
-                  "You do not need to run anything special. Just join the correct voice channel at the scheduled time and the bot will track attendance automatically."
+                  "You do not need to run anything special. Just join the correct voice channel in this server at the scheduled time and the bot will track attendance automatically."
               }
             ]
           })
@@ -423,17 +423,21 @@ async function handleStatus(interaction: ChatInputCommandInteraction) {
 }
 
 async function handleRegister(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId) {
+    throw new Error("This command must be used inside a server.");
+  }
+
   const enrollmentNo = interaction.options.getString("enrollmentno", true).trim();
   const userId = interaction.user.id;
   const username = interaction.user.globalName ?? interaction.user.username;
 
-  const existingForUser = registeredUserRepository.findByUserId(userId);
+  const existingForUser = registeredUserRepository.findByUserId(interaction.guildId, userId);
   if (existingForUser) {
     await interaction.editReply({
       embeds: [
         buildEmbed({
           title: "Already Registered",
-          description: `You are already registered with enrollment number **${existingForUser.enrollment_no}**.`,
+          description: `You are already registered in this server with enrollment number **${existingForUser.enrollment_no}**.`,
           color: 0xffb869
         })
       ]
@@ -441,13 +445,16 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const existingForEnrollment = registeredUserRepository.findByEnrollment(enrollmentNo);
+  const existingForEnrollment = registeredUserRepository.findByEnrollment(
+    interaction.guildId,
+    enrollmentNo
+  );
   if (existingForEnrollment) {
     await interaction.editReply({
       embeds: [
         buildEmbed({
           title: "Enrollment Number Unavailable",
-          description: "That enrollment number is already registered to another Discord user.",
+          description: "That enrollment number is already registered to another Discord user in this server.",
           color: 0xff7a7a
         })
       ]
@@ -456,6 +463,7 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
   }
 
   const registered = registeredUserRepository.upsert({
+    guildId: interaction.guildId,
     userId,
     username,
     enrollmentNo

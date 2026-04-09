@@ -51,41 +51,36 @@
             <p>Once the bot tracks attendance in a server, it will appear here.</p>
           </div>
         <% } else { %>
-          <section class="run-grid">
+          <section class="server-grid">
             <% servers.forEach((server) => { %>
-              <article class="run-card">
-                <div class="run-shell run-shell-header">
+              <article class="server-card">
+                <div class="server-card-top">
                   <div class="card-header">
                     <div>
                       <p class="eyebrow">Guild ID</p>
                       <h3><%= server.guildName %></h3>
+                      <p class="notes"><%= server.guildId %></p>
                     </div>
                     <span class="status <%= server.activeCount > 0 ? "live" : "idle" %>">
                       <%= server.activeCount > 0 ? `${server.activeCount} live` : "idle" %>
                     </span>
                   </div>
-                  <p class="notes"><%= server.guildId %></p>
                 </div>
 
-                <div class="run-shell run-shell-metrics">
-                  <div class="stats-grid compact-stats">
-                    <div class="stat-box">
-                      <div class="stat-label">Runs</div>
-                      <div class="stat-value"><%= server.runCount %></div>
-                    </div>
-                    <div class="stat-box">
-                      <div class="stat-label">Participants</div>
-                      <div class="stat-value"><%= server.trackedParticipants %></div>
-                    </div>
-                    <div class="stat-box">
-                      <div class="stat-label">Latest Activity</div>
-                      <div class="stat-value small-stat"><%= server.latestActivityDisplay %></div>
-                    </div>
+                <div class="server-bento">
+                  <div class="server-tile server-tile-number">
+                    <div class="stat-label">Runs</div>
+                    <div class="stat-value"><%= server.runCount %></div>
                   </div>
-                </div>
-
-                <div class="run-shell run-shell-actions">
-                  <div class="actions">
+                  <div class="server-tile server-tile-number">
+                    <div class="stat-label">Participants</div>
+                    <div class="stat-value"><%= server.trackedParticipants %></div>
+                  </div>
+                  <div class="server-tile server-tile-wide">
+                    <div class="stat-label">Latest Activity</div>
+                    <div class="server-meta-value"><%= server.latestActivityDisplay %></div>
+                  </div>
+                  <div class="server-tile server-tile-action">
                     <a href="/servers/<%= server.guildId %>" class="button-link">Open Server</a>
                   </div>
                 </div>

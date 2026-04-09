@@ -43,33 +43,38 @@ db.exec(`
     FOREIGN KEY (tracking_run_id) REFERENCES tracking_runs(id)
   );
 
-  CREATE TABLE IF NOT EXISTS registered_users (
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    username TEXT NOT NULL,
-    enrollment_no TEXT NOT NULL,
-    registered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (guild_id, user_id)
-  );
-
   CREATE INDEX IF NOT EXISTS idx_tracking_runs_guild_status
     ON tracking_runs(guild_id, status, is_active);
   CREATE INDEX IF NOT EXISTS idx_tracking_sessions_run_channel
     ON tracking_sessions(tracking_run_id, channel_id);
   CREATE INDEX IF NOT EXISTS idx_tracking_sessions_open
     ON tracking_sessions(tracking_run_id, left_at);
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_registered_users_guild_enrollment
-    ON registered_users(guild_id, enrollment_no);
-  CREATE INDEX IF NOT EXISTS idx_registered_users_guild_user
-    ON registered_users(guild_id, user_id);
 `);
 
-const registeredUserColumns = db
-  .prepare("PRAGMA table_info(registered_users)")
-  .all() as Array<{ name: string }>;
+const registeredUserTableExists = Boolean(
+  db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'registered_users'")
+    .get()
+);
 
-if (!registeredUserColumns.some((column) => column.name === "guild_id")) {
+if (!registeredUserTableExists) {
+  db.exec(`
+    CREATE TABLE registered_users (
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      username TEXT NOT NULL,
+      enrollment_no TEXT NOT NULL,
+      registered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (guild_id, user_id)
+    );
+  `);
+} else {
+  const registeredUserColumns = db
+    .prepare("PRAGMA table_info(registered_users)")
+    .all() as Array<{ name: string }>;
+
+  if (!registeredUserColumns.some((column) => column.name === "guild_id")) {
   db.exec(`
     ALTER TABLE registered_users RENAME TO registered_users_legacy;
 
@@ -108,7 +113,15 @@ if (!registeredUserColumns.some((column) => column.name === "guild_id")) {
 
     DROP TABLE registered_users_legacy;
   `);
+  }
 }
+
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_registered_users_guild_enrollment
+    ON registered_users(guild_id, enrollment_no);
+  CREATE INDEX IF NOT EXISTS idx_registered_users_guild_user
+    ON registered_users(guild_id, user_id);
+`);
 
 const statements = {
   createRun: db.prepare(`

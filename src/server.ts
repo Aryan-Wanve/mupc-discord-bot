@@ -80,6 +80,7 @@ type UserAnalyticsRow = {
 type ServerSummary = {
   guildId: string;
   guildName: string;
+  guildIconUrl: string | null;
   runCount: number;
   activeCount: number;
   trackedParticipants: number;
@@ -91,6 +92,8 @@ const createSnapshot = (value: unknown) =>
   createHash("sha1").update(JSON.stringify(value)).digest("hex").slice(0, 12);
 
 const getGuildName = (guildId: string) => discordClient.guilds.cache.get(guildId)?.name ?? `Server ${guildId}`;
+const getGuildIconUrl = (guildId: string) =>
+  discordClient.guilds.cache.get(guildId)?.iconURL({ extension: "png", size: 128 }) ?? null;
 
 const filterRunsByGuild = (guildId: string) => trackingRunRepository.listByGuild(guildId);
 const filterSessionsByGuild = (guildId: string) =>
@@ -577,6 +580,7 @@ const buildServerSelectionPageData = () => {
     .map(([guildId, value]) => ({
       guildId,
       guildName: getGuildName(guildId),
+      guildIconUrl: getGuildIconUrl(guildId),
       runCount: value.runs.length,
       activeCount: value.runs.filter((run) => run.is_active).length,
       trackedParticipants: value.participantIds.size,

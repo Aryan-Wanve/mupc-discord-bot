@@ -386,7 +386,7 @@ export async function scheduleTrackingForGuild(input: {
   guildId: string;
   title: string;
   scheduledStart: string;
-  scheduledEnd: string;
+  scheduledEnd: string | null;
 }) {
   const run = trackingRunRepository.createScheduled(input);
   if (!run) {
@@ -407,6 +407,37 @@ export async function scheduleTrackingForGuild(input: {
       ]
     }
   );
+
+  return run;
+}
+
+export async function scheduleTrackingStartOnlyForGuild(input: {
+  guildId: string;
+  title: string;
+  scheduledStart: string;
+}) {
+  const run = trackingRunRepository.createScheduled({
+    guildId: input.guildId,
+    title: input.title,
+    scheduledStart: input.scheduledStart,
+    scheduledEnd: null
+  });
+  if (!run) {
+    throw new Error("Failed to create the scheduled tracking session.");
+  }
+
+  await sendGuildLog(input.guildId, {
+    title: "Workshop Start Scheduled",
+    description: "This run will start automatically and stay active until you stop it manually.",
+    color: 0xffd85a,
+    fields: [
+      { name: "Title", value: input.title },
+      {
+        name: "Start Time",
+        value: formatScheduleWindow(input.scheduledStart, null)
+      }
+    ]
+  });
 
   return run;
 }

@@ -3,7 +3,13 @@ import { loginBot } from "./bot";
 import { startServer } from "./server";
 
 async function main() {
-  await Promise.all([loginBot(), startServer()]);
+  await startServer();
+
+  try {
+    await loginBot();
+  } catch (error) {
+    console.error("Discord bot failed to start:", error);
+  }
 }
 
 main().catch((error) => {

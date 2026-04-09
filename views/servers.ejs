@@ -6,7 +6,7 @@
     <title>Choose A Server</title>
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
-  <body data-live-page="<%= livePage %>" data-live-snapshot="<%= liveSnapshot %>">
+  <body class="servers-page" data-live-page="<%= livePage %>" data-live-snapshot="<%= liveSnapshot %>">
     <main class="page">
       <section class="hero">
         <div class="hero-grid">
@@ -56,10 +56,23 @@
               <article class="server-card">
                 <div class="server-card-top">
                   <div class="card-header">
-                    <div>
+                    <div class="server-card-heading">
+                      <% if (server.guildIconUrl) { %>
+                        <img
+                          src="<%= server.guildIconUrl %>"
+                          alt="<%= server.guildName %> icon"
+                          class="server-avatar"
+                        />
+                      <% } else { %>
+                        <div class="server-avatar server-avatar-fallback">
+                          <%= server.guildName.trim().slice(0, 2).toUpperCase() %>
+                        </div>
+                      <% } %>
+                      <div>
                       <p class="eyebrow">Guild ID</p>
                       <h3><%= server.guildName %></h3>
                       <p class="notes"><%= server.guildId %></p>
+                      </div>
                     </div>
                     <span class="status <%= server.activeCount > 0 ? "live" : "idle" %>">
                       <%= server.activeCount > 0 ? `${server.activeCount} live` : "idle" %>

@@ -51,7 +51,6 @@ if (livePage && liveSnapshot) {
         currentMain.replaceWith(nextMain);
         currentSnapshot = nextBody.dataset.liveSnapshot || currentSnapshot;
         body.dataset.liveSnapshot = currentSnapshot;
-        body.classList.remove("is-live-refreshing");
         body.classList.add("has-live-update");
         setToast("Dashboard updated", "updated");
 
@@ -61,9 +60,9 @@ if (livePage && liveSnapshot) {
       }
     } catch (error) {
       console.error("Dashboard live refresh failed:", error);
-      body.classList.remove("is-live-refreshing");
       setToast("Auto-sync will retry", "error");
     } finally {
+      body.classList.remove("is-live-refreshing");
       isRefreshing = false;
     }
   };

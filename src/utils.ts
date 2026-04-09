@@ -48,6 +48,28 @@ export const parseTodayTimeRange = (startText: string, endText: string) => {
   };
 };
 
+export const parseTodayTime = (startText: string) => {
+  const timePattern = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+  const startMatch = startText.match(timePattern);
+
+  if (!startMatch) {
+    throw new Error("Times must use 24-hour HH:mm format, like 08:00 or 21:30.");
+  }
+
+  const now = new Date();
+  const start = new Date(now);
+  start.setSeconds(0, 0);
+  start.setHours(Number(startMatch[1]), Number(startMatch[2]), 0, 0);
+
+  if (start <= now) {
+    start.setDate(start.getDate() + 1);
+  }
+
+  return {
+    startIso: start.toISOString()
+  };
+};
+
 export const formatDateTime = (value: string | null) => {
   if (!value) {
     return "Not set";
@@ -65,14 +87,11 @@ export const formatDateTime = (value: string | null) => {
 };
 
 export const formatScheduleWindow = (startValue: string | null, endValue: string | null) => {
-  if (!startValue || !endValue) {
+  if (!startValue) {
     return "Not scheduled";
   }
 
   const start = new Date(startValue);
-  const end = new Date(endValue);
-  const sameDay = start.toDateString() === end.toDateString();
-
   const dateFormatter = new Intl.DateTimeFormat("en-IN", {
     year: "numeric",
     month: "short",
@@ -84,6 +103,13 @@ export const formatScheduleWindow = (startValue: string | null, endValue: string
     minute: "2-digit",
     hour12: true
   });
+
+  if (!endValue) {
+    return `${dateFormatter.format(start)}, ${timeFormatter.format(start)} onward`;
+  }
+
+  const end = new Date(endValue);
+  const sameDay = start.toDateString() === end.toDateString();
 
   if (sameDay) {
     return `${dateFormatter.format(start)}, ${timeFormatter.format(start)} to ${timeFormatter.format(end)}`;

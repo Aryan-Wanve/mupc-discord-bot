@@ -44,11 +44,13 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS registered_users (
-    user_id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
     username TEXT NOT NULL,
     enrollment_no TEXT NOT NULL,
     registered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (guild_id, user_id)
   );
 
   CREATE INDEX IF NOT EXISTS idx_tracking_runs_guild_status
@@ -57,9 +59,56 @@ db.exec(`
     ON tracking_sessions(tracking_run_id, channel_id);
   CREATE INDEX IF NOT EXISTS idx_tracking_sessions_open
     ON tracking_sessions(tracking_run_id, left_at);
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_registered_users_enrollment
-    ON registered_users(enrollment_no);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_registered_users_guild_enrollment
+    ON registered_users(guild_id, enrollment_no);
+  CREATE INDEX IF NOT EXISTS idx_registered_users_guild_user
+    ON registered_users(guild_id, user_id);
 `);
+
+const registeredUserColumns = db
+  .prepare("PRAGMA table_info(registered_users)")
+  .all() as Array<{ name: string }>;
+
+if (!registeredUserColumns.some((column) => column.name === "guild_id")) {
+  db.exec(`
+    ALTER TABLE registered_users RENAME TO registered_users_legacy;
+
+    CREATE TABLE registered_users (
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      username TEXT NOT NULL,
+      enrollment_no TEXT NOT NULL,
+      registered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (guild_id, user_id)
+    );
+
+    CREATE UNIQUE INDEX idx_registered_users_guild_enrollment
+      ON registered_users(guild_id, enrollment_no);
+    CREATE INDEX idx_registered_users_guild_user
+      ON registered_users(guild_id, user_id);
+
+    INSERT OR IGNORE INTO registered_users (
+      guild_id,
+      user_id,
+      username,
+      enrollment_no,
+      registered_at,
+      updated_at
+    )
+    SELECT DISTINCT
+      tracking_sessions.guild_id,
+      registered_users_legacy.user_id,
+      registered_users_legacy.username,
+      registered_users_legacy.enrollment_no,
+      registered_users_legacy.registered_at,
+      registered_users_legacy.updated_at
+    FROM registered_users_legacy
+    INNER JOIN tracking_sessions ON tracking_sessions.user_id = registered_users_legacy.user_id;
+
+    DROP TABLE registered_users_legacy;
+  `);
+}
 
 const statements = {
   createRun: db.prepare(`

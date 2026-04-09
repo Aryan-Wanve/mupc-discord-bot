@@ -14,11 +14,12 @@ import { registeredUserRepository } from "./db";
 import {
   cancelScheduledTrackingForGuild,
   getTrackingStatusForGuild,
+  scheduleTrackingStartOnlyForGuild,
   scheduleTrackingForGuild,
   startTrackingForGuild,
   stopTrackingForGuild
 } from "./bot";
-import { formatScheduleWindow, parseTodayTimeRange } from "./utils";
+import { formatScheduleWindow, parseTodayTime, parseTodayTimeRange } from "./utils";
 
 const pingCommand = new SlashCommandBuilder()
   .setName("ping")
@@ -77,6 +78,20 @@ const trackingCommand = new SlashCommandBuilder()
         option
           .setName("end")
           .setDescription("End time in 24-hour format, for example 09:00")
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("schedule-start")
+      .setDescription("Schedule only the workshop start time and stop it manually later.")
+      .addStringOption((option) =>
+        option.setName("title").setDescription("Title for the scheduled run").setRequired(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("start")
+          .setDescription("Start time in 24-hour format, for example 08:00")
           .setRequired(true)
       )
   )
@@ -182,7 +197,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Admin Commands",
                 value:
-                  "`/tracking start [title]`\n`/tracking stop`\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\n`/tracking cancel runid:<id>`\n`/tracking status`\n`/ping`"
+                  "`/tracking start [title]`\n`/tracking stop`\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\n`/tracking schedule-start title:<name> start:<HH:mm>`\n`/tracking cancel runid:<id>`\n`/tracking status`\n`/ping`"
               },
               {
                 name: "Recommended Workflow",
@@ -299,6 +314,40 @@ async function handleSchedule(interaction: ChatInputCommandInteraction) {
           {
             name: "Time Window",
             value: formatScheduleWindow(run.scheduled_start, run.scheduled_end)
+          }
+        ]
+      })
+    ]
+  });
+}
+
+async function handleScheduleStart(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId) {
+    throw new Error("This command must be used inside a server.");
+  }
+
+  const title = interaction.options.getString("title", true);
+  const start = interaction.options.getString("start", true);
+  const schedule = parseTodayTime(start);
+
+  const run = await scheduleTrackingStartOnlyForGuild({
+    guildId: interaction.guildId,
+    title,
+    scheduledStart: schedule.startIso
+  });
+
+  await interaction.editReply({
+    embeds: [
+      buildEmbed({
+        title: "Workshop Start Scheduled",
+        description: "The bot will start automatically and keep running until you stop it manually.",
+        color: 0xffd85a,
+        fields: [
+          { name: "Run", value: `#${run.id}`, inline: true },
+          { name: "Title", value: run.title, inline: true },
+          {
+            name: "Start Time",
+            value: formatScheduleWindow(run.scheduled_start, null)
           }
         ]
       })
@@ -486,6 +535,11 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
     if (subcommand === "schedule") {
       await handleSchedule(interaction);
+      return;
+    }
+
+    if (subcommand === "schedule-start") {
+      await handleScheduleStart(interaction);
       return;
     }
 

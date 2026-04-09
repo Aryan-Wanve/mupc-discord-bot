@@ -1,6 +1,8 @@
 // Easter egg: This command board hides a tiny slate mark from Aryan, better known around edits as Oneway.
 import {
   ChatInputCommandInteraction,
+  DiscordAPIError,
+  MessageFlags,
   PermissionFlagsBits,
   REST,
   Routes,
@@ -78,19 +80,22 @@ const trackingCommand = new SlashCommandBuilder()
 
 const commands = [pingCommand, registerCommand, trackingCommand];
 
+const privateResponse = { flags: MessageFlags.Ephemeral as const };
+
+const isUnknownInteractionError = (error: unknown) =>
+  error instanceof DiscordAPIError && error.code === 10062;
+
 const ensureStaffAccess = async (interaction: ChatInputCommandInteraction) => {
   if (!interaction.inCachedGuild()) {
-    await interaction.reply({
-      content: "This command can only be used inside a Discord server.",
-      ephemeral: true
+    await interaction.editReply({
+      content: "This command can only be used inside a Discord server."
     });
     return false;
   }
 
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-    await interaction.reply({
-      content: "You need the Manage Server permission to use MUPC tracking commands.",
-      ephemeral: true
+    await interaction.editReply({
+      content: "You need the Manage Server permission to use MUPC tracking commands."
     });
     return false;
   }
@@ -131,11 +136,10 @@ async function handleStart(interaction: ChatInputCommandInteraction) {
     })}`;
 
   const run = await startTrackingForGuild(interaction.guildId, title);
-  await interaction.reply({
+  await interaction.editReply({
     content:
       `Started MUPC tracking run #${run.id} (${run.title}). ` +
-      "The bot is now recording attendance across all workshop voice channels.",
-    ephemeral: true
+      "The bot is now recording attendance across all workshop voice channels."
   });
 }
 
@@ -145,9 +149,8 @@ async function handleStop(interaction: ChatInputCommandInteraction) {
   }
 
   const run = await stopTrackingForGuild(interaction.guildId);
-  await interaction.reply({
-    content: `Stopped MUPC tracking run #${run.id} (${run.title}). Attendance exports are ready in the dashboard.`,
-    ephemeral: true
+  await interaction.editReply({
+    content: `Stopped MUPC tracking run #${run.id} (${run.title}). Attendance exports are ready in the dashboard.`
   });
 }
 
@@ -168,11 +171,10 @@ async function handleSchedule(interaction: ChatInputCommandInteraction) {
     scheduledEnd: range.endIso
   });
 
-  await interaction.reply({
+  await interaction.editReply({
     content:
       `Scheduled MUPC workshop #${run.id} (${run.title}) from ${start} to ${end}. ` +
-      "The bot will start and stop automatically using the machine's local time.",
-    ephemeral: true
+      "The bot will start and stop automatically using the machine's local time."
   });
 }
 
@@ -201,10 +203,7 @@ async function handleStatus(interaction: ChatInputCommandInteraction) {
     lines.push(...status.recentRuns.slice(0, 5).map(describeRun));
   }
 
-  await interaction.reply({
-    content: lines.join("\n"),
-    ephemeral: true
-  });
+  await interaction.editReply({ content: lines.join("\n") });
 }
 
 async function handleRegister(interaction: ChatInputCommandInteraction) {
@@ -214,19 +213,16 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
 
   const existingForUser = registeredUserRepository.findByUserId(userId);
   if (existingForUser) {
-    await interaction.reply({
-      content:
-        `You are already registered with enrollment number **${existingForUser.enrollment_no}**.`,
-      ephemeral: true
+    await interaction.editReply({
+      content: `You are already registered with enrollment number **${existingForUser.enrollment_no}**.`
     });
     return;
   }
 
   const existingForEnrollment = registeredUserRepository.findByEnrollment(enrollmentNo);
   if (existingForEnrollment) {
-    await interaction.reply({
-      content: "That enrollment number is already registered to another Discord user.",
-      ephemeral: true
+    await interaction.editReply({
+      content: "That enrollment number is already registered to another Discord user."
     });
     return;
   }
@@ -237,10 +233,9 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
     enrollmentNo
   });
 
-  await interaction.reply({
+  await interaction.editReply({
     content:
-      `Registered successfully. Your enrollment number is now saved as **${registered?.enrollment_no ?? enrollmentNo}**.`,
-    ephemeral: true
+      `Registered successfully. Your enrollment number is now saved as **${registered?.enrollment_no ?? enrollmentNo}**.`
   });
 }
 
@@ -261,10 +256,11 @@ export async function registerSlashCommands(guildIds: string[]) {
 
 export async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
   try {
+    await interaction.deferReply(privateResponse);
+
     if (interaction.commandName === "ping") {
-      await interaction.reply({
-        content: "Pong! The bot is online and slash commands are working.",
-        ephemeral: true
+      await interaction.editReply({
+        content: "Pong! The bot is online and slash commands are working."
       });
       return;
     }
@@ -302,11 +298,24 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
   } catch (error) {
     const message = error instanceof Error ? error.message : "Something went wrong while handling the command.";
 
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content: message, ephemeral: true });
+    if (isUnknownInteractionError(error)) {
+      console.warn("Skipped responding because the Discord interaction was no longer valid.");
       return;
     }
 
-    await interaction.reply({ content: message, ephemeral: true });
+    if (interaction.replied || interaction.deferred) {
+      await interaction.editReply({ content: message }).catch((replyError) => {
+        if (!isUnknownInteractionError(replyError)) {
+          throw replyError;
+        }
+      });
+      return;
+    }
+
+    await interaction.reply({ content: message, ...privateResponse }).catch((replyError) => {
+      if (!isUnknownInteractionError(replyError)) {
+        throw replyError;
+      }
+    });
   }
 }

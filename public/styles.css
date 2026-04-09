@@ -379,6 +379,24 @@ h3 {
   gap: 14px;
 }
 
+.server-title-block {
+  display: grid;
+  gap: 4px;
+}
+
+.server-title-block h3 {
+  margin-bottom: 0;
+}
+
+.server-id-label {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .server-avatar {
   width: 52px;
   height: 52px;

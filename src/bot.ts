@@ -351,6 +351,36 @@ export async function scheduleTrackingForGuild(input: {
   return run;
 }
 
+export async function cancelScheduledTrackingForGuild(guildId: string, runId: number) {
+  const run = trackingRunRepository.findById(runId);
+  if (!run || run.guild_id !== guildId) {
+    throw new Error("Scheduled tracking run not found for this server.");
+  }
+
+  if (run.is_active || run.status === "active") {
+    throw new Error("That run is already active. Use /tracking stop instead.");
+  }
+
+  if (run.status !== "scheduled") {
+    throw new Error("Only scheduled runs can be cancelled.");
+  }
+
+  const deleted = trackingRunRepository.deleteScheduled(runId, guildId);
+  if (!deleted) {
+    throw new Error("Failed to cancel the scheduled run.");
+  }
+
+  await sendGuildLog(
+    guildId,
+    `Cancelled scheduled workshop tracking for **${run.title}** that was set for **${formatScheduleWindow(
+      run.scheduled_start,
+      run.scheduled_end
+    )}**.`
+  );
+
+  return run;
+}
+
 export function getTrackingStatusForGuild(guildId: string) {
   const activeRun = trackingRunRepository.findActiveByGuild(guildId);
   const runs = trackingRunRepository.listByGuild(guildId).slice(0, 10);

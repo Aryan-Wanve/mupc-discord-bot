@@ -1,5 +1,6 @@
 // Easter egg: these dashboards were framed with a little Oneway energy for future explorers.
 import ExcelJS from "exceljs";
+import { createHash } from "crypto";
 import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import { config } from "./config";
@@ -74,6 +75,9 @@ type UserAnalyticsRow = {
   firstSeenDisplay: string;
   lastSeenDisplay: string;
 };
+
+const createSnapshot = (value: unknown) =>
+  createHash("sha1").update(JSON.stringify(value)).digest("hex").slice(0, 12);
 
 const sanitizeWorksheetName = (name: string) =>
   name.replace(/[:\\/?*\[\]]/g, " ").trim().slice(0, 31) || "Voice Channel";
@@ -504,9 +508,7 @@ const createWorkbookForRun = (runId: number) => {
   return { run, workbook, summary };
 };
 
-app.use(requireBasicAuth);
-
-app.get("/", (req, res) => {
+const buildRunsPageData = () => {
   const runs = trackingRunRepository.list().map((run) => {
     const analytics = buildRunAnalytics(run.id, run.started_at, run.ended_at);
 
@@ -523,19 +525,34 @@ app.get("/", (req, res) => {
     };
   });
 
-  res.render("index", { runs, currentPage: "runs" });
-});
+  return {
+    runs,
+    currentPage: "runs",
+    livePage: "runs",
+    liveSnapshot: createSnapshot({
+      runs: trackingRunRepository.list(),
+      sessions: trackingSessionRepository.listAll()
+    })
+  };
+};
 
-app.get("/runs/:id", (req, res) => {
-  const run = trackingRunRepository.findById(Number(req.params.id));
+const buildRunDetailPageData = (runId: number) => {
+  const run = trackingRunRepository.findById(runId);
   if (!run) {
-    return res.status(404).send("Tracking run not found.");
+    return null;
   }
 
   const analytics = buildRunAnalytics(run.id, run.started_at, run.ended_at);
 
-  res.render("run-detail", {
+  return {
     currentPage: "runs",
+    livePage: "run-detail",
+    liveEntityId: String(run.id),
+    liveSnapshot: createSnapshot({
+      run,
+      sessions: trackingSessionRepository.listByRun(run.id),
+      registrations: registeredUserRepository.list()
+    }),
     run: {
       ...run,
       created_display: formatDateTime(run.created_at),
@@ -545,10 +562,10 @@ app.get("/runs/:id", (req, res) => {
       ended_display: formatDateTime(run.ended_at)
     },
     analytics
-  });
-});
+  };
+};
 
-app.get("/users", (req, res) => {
+const buildUsersPageData = () => {
   const users = buildUserAnalytics();
 
   const registrations = registeredUserRepository.list().map((user) => ({
@@ -564,7 +581,61 @@ app.get("/users", (req, res) => {
     left_display: formatDateTime(session.left_at)
   }));
 
-  res.render("users", { users, sessions, registrations, currentPage: "users" });
+  return {
+    users,
+    sessions,
+    registrations,
+    currentPage: "users",
+    livePage: "users",
+    liveSnapshot: createSnapshot({
+      runs: trackingRunRepository.list(),
+      registrations: registeredUserRepository.list(),
+      sessions: trackingSessionRepository.listAll()
+    })
+  };
+};
+
+app.use(requireBasicAuth);
+
+app.get("/", (req, res) => {
+  res.render("index", buildRunsPageData());
+});
+
+app.get("/runs/:id", (req, res) => {
+  const viewModel = buildRunDetailPageData(Number(req.params.id));
+  if (!viewModel) {
+    return res.status(404).send("Tracking run not found.");
+  }
+
+  res.render("run-detail", viewModel);
+});
+
+app.get("/users", (req, res) => {
+  res.render("users", buildUsersPageData());
+});
+
+app.get("/api/dashboard-snapshot", (req, res) => {
+  const page = String(req.query.page ?? "");
+  const entityId = req.query.id ? Number(req.query.id) : null;
+
+  if (page === "runs") {
+    return res.json({ snapshot: buildRunsPageData().liveSnapshot });
+  }
+
+  if (page === "run-detail" && entityId) {
+    const viewModel = buildRunDetailPageData(entityId);
+    if (!viewModel) {
+      return res.status(404).json({ error: "Tracking run not found." });
+    }
+
+    return res.json({ snapshot: viewModel.liveSnapshot });
+  }
+
+  if (page === "users") {
+    return res.json({ snapshot: buildUsersPageData().liveSnapshot });
+  }
+
+  return res.status(400).json({ error: "Unknown dashboard page." });
 });
 
 app.get("/users/export.csv", (req, res) => {

@@ -1,11 +1,11 @@
 # MUPC Attendance Bot Tutorial
 
-This file is meant for club members and coordinators who will actually use the bot during workshops.
+This file is meant for club cores and heads who will actually use the bot during workshops.
 
 The bot has two parts:
 
 - the Discord bot, which tracks attendance in voice channels
-- the dashboard, where coordinators can review and export the records
+- the dashboard, where the core/head can review and export the records
 
 If you are a student attending a workshop, you will mostly use one command: `/register`.
 
@@ -24,7 +24,7 @@ Once tracking is active, it keeps a record of:
 
 After the session, the dashboard can be used to review the attendance and export it.
 
-## Two roles: members and coordinators
+## Two roles: members and the core/head
 
 Most people using this bot fall into one of these two groups.
 
@@ -36,9 +36,9 @@ Members are the students attending the session. They only need to:
 2. join the voice channel when the workshop starts
 3. stay in the channel while attending
 
-### Coordinators
+### the core/head
 
-Coordinators are the people running the session. They need to:
+the core/head are the people running the session. They need to:
 
 1. start or schedule tracking
 2. stop tracking when the workshop ends if needed
@@ -101,7 +101,7 @@ Just:
 
 The bot handles the attendance automatically.
 
-## Part 2: What coordinators need to do
+## Part 2: What the core/head need to do
 
 To use the tracking commands, you need the `Manage Server` permission in Discord.
 
@@ -208,7 +208,7 @@ Use:
 /help
 ```
 
-For coordinators, the help command includes the full admin command set.
+For the core/head, the help command includes the full admin command set.
 
 ## Recommended workshop flow
 
@@ -340,7 +340,7 @@ This is useful when you want:
 
 - the final attendance sheet for one event
 - a workshop-specific report
-- a file that can be shared directly with coordinators or faculty
+- a file that can be shared directly with the core/head or faculty
 
 ## A complete example
 
@@ -442,7 +442,7 @@ and stop it manually later with:
 The easiest way to think about this bot is:
 
 - students register once and then just join the voice channel
-- coordinators start or schedule the run
+- the core/head start or schedule the run
 - the dashboard is used afterward to review and export attendance
 
 If everyone follows that flow, the bot is straightforward to use.

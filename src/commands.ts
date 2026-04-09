@@ -180,6 +180,15 @@ const describeRun = (run: {
     `Scheduled: ${run.scheduled_start ?? "Not scheduled"} -> ${run.scheduled_end ?? "Not scheduled"}`
   ].join("\n");
 
+const getInteractionDisplayName = async (interaction: ChatInputCommandInteraction) => {
+  if (interaction.inCachedGuild()) {
+    return interaction.member.displayName;
+  }
+
+  const member = await interaction.guild?.members.fetch(interaction.user.id).catch(() => null);
+  return member?.displayName ?? interaction.user.globalName ?? interaction.user.username;
+};
+
 async function handleHelp(interaction: ChatInputCommandInteraction) {
   await interaction.editReply({
     embeds: canManageTracking(interaction)
@@ -429,7 +438,7 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
 
   const enrollmentNo = interaction.options.getString("enrollmentno", true).trim();
   const userId = interaction.user.id;
-  const username = interaction.user.globalName ?? interaction.user.username;
+  const username = await getInteractionDisplayName(interaction);
 
   const existingForUser = registeredUserRepository.findByUserId(interaction.guildId, userId);
   if (existingForUser) {

@@ -197,15 +197,15 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Admin Commands",
                 value:
-                  "`/tracking start [title]`\n`/tracking stop`\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\n`/tracking schedule-start title:<name> start:<HH:mm>`\n`/tracking cancel runid:<id>`\n`/tracking status`\n`/ping`"
+                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
               },
               {
                 name: "Recommended Workflow",
                 value:
-                  "1. Ask members to use `/register`.\n2. Start or schedule tracking.\n3. Check `/tracking status`.\n4. Stop the run when the workshop ends.\n5. Review exports in the dashboard."
-              }
-            ]
-          })
+                  "1. Ask members to use `/register` in the same server.\n2. Use `/tracking start` for immediate sessions, `/tracking schedule` for fixed windows, or `/tracking schedule-start` when the ending time is not fixed.\n3. Use `/tracking status` to confirm the run ID and state.\n4. Use `/tracking stop` when the workshop ends, or `/tracking cancel` if a scheduled run should not happen.\n5. Review the server-specific dashboard and exports."
+                }
+              ]
+            })
         ]
       : [
           buildEmbed({
@@ -220,12 +220,12 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "How Attendance Works",
                 value:
-                  "Join the workshop voice channel when the session starts and stay connected while it runs. A server admin handles starting, scheduling, and stopping attendance tracking."
+                  "Join the workshop voice channel in this server when the session starts and stay connected while it runs. A server admin handles starting, scheduling, and stopping attendance tracking."
               },
               {
                 name: "If A Workshop Is Scheduled",
                 value:
-                  "You do not need to run anything special. Just join the correct voice channel in this server at the scheduled time and the bot will track attendance automatically."
+                  "You do not need to run anything special. Just join the correct voice channel in this server at the scheduled time and the bot will track attendance automatically. If the admin used a start-only schedule, tracking will begin automatically and end when they stop it."
               }
             ]
           })

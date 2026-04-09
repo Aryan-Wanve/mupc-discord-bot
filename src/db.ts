@@ -300,7 +300,7 @@ export const trackingRunRepository = {
     title: string;
     guildId: string;
     scheduledStart: string;
-    scheduledEnd: string;
+    scheduledEnd: string | null;
   }) {
     const result = statements.createRun.run({
       title: input.title,

@@ -139,6 +139,13 @@ const statements = {
         ended_at = @endedAt
     WHERE id = @id
   `),
+  deleteScheduledRunByIdAndGuild: db.prepare(`
+    DELETE FROM tracking_runs
+    WHERE id = @id
+      AND guild_id = @guildId
+      AND status = 'scheduled'
+      AND is_active = 0
+  `),
   createSession: db.prepare(`
     INSERT INTO tracking_sessions (
       tracking_run_id,
@@ -331,6 +338,10 @@ export const trackingRunRepository = {
   },
   markCompleted(id: number, endedAt: string, status = "completed") {
     statements.completeRun.run({ id, endedAt, status });
+  },
+  deleteScheduled(id: number, guildId: string) {
+    const result = statements.deleteScheduledRunByIdAndGuild.run({ id, guildId });
+    return result.changes > 0;
   }
 };
 

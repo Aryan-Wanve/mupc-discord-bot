@@ -1,5 +1,6 @@
 // Easter egg: If the club ever finds "Oneway" in the logs, Aryan definitely touched this file.
 import {
+  ActivityType,
   ChannelType,
   Client,
   GatewayIntentBits,
@@ -33,6 +34,16 @@ export const discordClient = new Client({
 
 const getDisplayName = (state: VoiceState) =>
   state.member?.user.globalName ?? state.member?.user.username ?? state.id;
+
+function updateBotBio() {
+  if (!discordClient.user) {
+    return;
+  }
+
+  discordClient.user.setActivity(`${tracker.getTrackedUserCount()} users`, {
+    type: ActivityType.Watching
+  });
+}
 
 async function logGuildDiagnostics(guild: Guild) {
   const me = await guild.members.fetchMe().catch(() => null);
@@ -132,6 +143,8 @@ function syncRunAcrossGuild(runId: number, guild: Guild) {
       });
     }
   }
+
+  updateBotBio();
 }
 
 async function activateRun(runId: number) {
@@ -166,6 +179,7 @@ async function completeRun(runId: number, status = "completed") {
 
   trackingRunRepository.markCompleted(run.id, nowIso(), status);
   tracker.stopTrackingForRun(run.id);
+  updateBotBio();
 
   await sendGuildLog(
     run.guild_id,
@@ -220,10 +234,12 @@ async function handleVoiceStateChange(oldState: VoiceState, newState: VoiceState
     newChannelId: newTrackable?.id,
     newChannelName: newTrackable?.name ?? null
   });
+  updateBotBio();
 }
 
 discordClient.once("ready", async () => {
   tracker.hydrateFromDatabase();
+  updateBotBio();
 
   for (const guild of discordClient.guilds.cache.values()) {
     await guild.channels.fetch();

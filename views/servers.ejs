@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Choose A Server</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body data-live-page="<%= livePage %>" data-live-snapshot="<%= liveSnapshot %>">
+    <main class="page">
+      <section class="hero">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Attendance Dashboard</p>
+            <h1>Choose the server you want to review.</h1>
+            <p class="intro">
+              The dashboard is now organized per server. Pick a Discord server below to open its runs,
+              users, exports, and live attendance analytics.
+            </p>
+          </div>
+
+          <aside class="hero-side">
+            <div class="mini-card">
+              <strong><%= servers.length %></strong>
+              <span>Servers with attendance data</span>
+            </div>
+            <div class="mini-card">
+              <strong><%= servers.reduce((sum, server) => sum + server.runCount, 0) %></strong>
+              <span>Total tracked runs</span>
+            </div>
+            <div class="mini-card">
+              <strong><%= servers.reduce((sum, server) => sum + server.activeCount, 0) %></strong>
+              <span>Runs live right now</span>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="page-title-row">
+          <div>
+            <p class="eyebrow">Servers</p>
+            <h2>Server selector</h2>
+          </div>
+          <span class="muted-chip">Open one dashboard at a time</span>
+        </div>
+
+        <% if (servers.length === 0) { %>
+          <div class="empty-state">
+            <h2>No server data yet</h2>
+            <p>Once the bot tracks attendance in a server, it will appear here.</p>
+          </div>
+        <% } else { %>
+          <section class="run-grid">
+            <% servers.forEach((server) => { %>
+              <article class="run-card">
+                <div class="run-shell run-shell-header">
+                  <div class="card-header">
+                    <div>
+                      <p class="eyebrow">Guild ID</p>
+                      <h3><%= server.guildName %></h3>
+                    </div>
+                    <span class="status <%= server.activeCount > 0 ? "live" : "idle" %>">
+                      <%= server.activeCount > 0 ? `${server.activeCount} live` : "idle" %>
+                    </span>
+                  </div>
+                  <p class="notes"><%= server.guildId %></p>
+                </div>
+
+                <div class="run-shell run-shell-metrics">
+                  <div class="stats-grid compact-stats">
+                    <div class="stat-box">
+                      <div class="stat-label">Runs</div>
+                      <div class="stat-value"><%= server.runCount %></div>
+                    </div>
+                    <div class="stat-box">
+                      <div class="stat-label">Participants</div>
+                      <div class="stat-value"><%= server.trackedParticipants %></div>
+                    </div>
+                    <div class="stat-box">
+                      <div class="stat-label">Latest Activity</div>
+                      <div class="stat-value small-stat"><%= server.latestActivityDisplay %></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="run-shell run-shell-actions">
+                  <div class="actions">
+                    <a href="/servers/<%= server.guildId %>" class="button-link">Open Server</a>
+                  </div>
+                </div>
+              </article>
+            <% }) %>
+          </section>
+        <% } %>
+      </section>
+    </main>
+    <script src="/assets/dashboard-live.js"></script>
+  </body>
+</html>

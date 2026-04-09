@@ -91,6 +91,43 @@ body.is-live-refreshing::after {
   filter: blur(18px);
 }
 
+.floating-home-link {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(98, 230, 255, 0.28);
+  background: rgba(8, 13, 28, 0.78);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 0 0 1px rgba(98, 230, 255, 0.12),
+    0 18px 42px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(18px);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
+}
+
+.floating-home-link:hover {
+  transform: translateY(-2px);
+  border-color: rgba(98, 230, 255, 0.5);
+  background: rgba(12, 20, 38, 0.9);
+  box-shadow:
+    0 0 0 1px rgba(98, 230, 255, 0.18),
+    0 22px 48px rgba(0, 0, 0, 0.38);
+}
+
 .page {
   width: min(1780px, calc(100% - 28px));
   margin: 0 auto;
@@ -830,7 +867,7 @@ small {
 @media (max-width: 720px) {
   .page {
     width: min(100% - 18px, 1780px);
-    padding-top: 18px;
+    padding-top: 72px;
   }
 
   .hero,
@@ -858,5 +895,12 @@ small {
     bottom: 14px;
     left: 14px;
     text-align: center;
+  }
+
+  .floating-home-link {
+    top: 12px;
+    left: 12px;
+    min-width: 74px;
+    padding: 10px 14px;
   }
 }

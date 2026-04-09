@@ -25,6 +25,7 @@ export type TrackingSessionRow = {
 };
 
 export type RegisteredUserRow = {
+  guild_id: string;
   user_id: string;
   username: string;
   enrollment_no: string;

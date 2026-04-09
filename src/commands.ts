@@ -23,6 +23,10 @@ const pingCommand = new SlashCommandBuilder()
   .setName("ping")
   .setDescription("Check whether the bot is responding.");
 
+const helpCommand = new SlashCommandBuilder()
+  .setName("help")
+  .setDescription("Learn how to use the MUPC attendance bot and its commands.");
+
 const registerCommand = new SlashCommandBuilder()
   .setName("register")
   .setDescription("Register your enrollment number for MUPC workshop attendance exports.")
@@ -90,12 +94,15 @@ const trackingCommand = new SlashCommandBuilder()
     subcommand.setName("status").setDescription("Show the active workshop and recent MUPC runs for this server.")
   );
 
-const commands = [pingCommand, registerCommand, trackingCommand];
+const commands = [pingCommand, helpCommand, registerCommand, trackingCommand];
 
 const privateResponse = { flags: MessageFlags.Ephemeral as const };
 
 const isUnknownInteractionError = (error: unknown) =>
   error instanceof DiscordAPIError && error.code === 10062;
+
+const canManageTracking = (interaction: ChatInputCommandInteraction) =>
+  interaction.inCachedGuild() && Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 
 const ensureStaffAccess = async (interaction: ChatInputCommandInteraction) => {
   if (!interaction.inCachedGuild()) {
@@ -131,6 +138,72 @@ const describeRun = (run: {
     `Ended: ${run.ended_at ?? "Not ended"}`,
     `Scheduled: ${run.scheduled_start ?? "Not scheduled"} -> ${run.scheduled_end ?? "Not scheduled"}`
   ].join("\n");
+
+const buildUserHelpMessage = () =>
+  [
+    "**MUPC Attendance Bot Help**",
+    "",
+    "This bot is used for workshop attendance in voice channels.",
+    "",
+    "**What you should use**",
+    "`/register enrollmentno:<your enrollment number>`",
+    "Register your enrollment number so your attendance can be matched correctly in exports.",
+    "",
+    "`/help`",
+    "Shows this guide.",
+    "",
+    "**How attendance works for members**",
+    "Join the workshop voice channel when the session starts.",
+    "Stay in the voice channel while the workshop is running.",
+    "A server admin handles starting, scheduling, and stopping attendance tracking.",
+    "",
+    "**If a workshop is scheduled**",
+    "You do not need to run anything special.",
+    "Just join the correct voice channel at the scheduled time and the bot will track attendance automatically once the admin schedule starts."
+  ].join("\n");
+
+const buildAdminHelpMessage = () =>
+  [
+    "**MUPC Attendance Bot Help**",
+    "",
+    "This bot tracks workshop attendance across the server's voice channels and syncs reports to the dashboard.",
+    "",
+    "**Member command**",
+    "`/register enrollmentno:<student enrollment number>`",
+    "Links a Discord user to an enrollment number for exports.",
+    "",
+    "**Admin commands**",
+    "`/tracking start [title]`",
+    "Starts attendance tracking immediately for all voice channels in this server.",
+    "",
+    "`/tracking stop`",
+    "Stops the currently active tracking run.",
+    "",
+    "`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`",
+    "Schedules a workshop using 24-hour local machine time.",
+    "",
+    "`/tracking cancel runid:<id>`",
+    "Cancels a scheduled run before it starts.",
+    "",
+    "`/tracking status`",
+    "Shows the active run and recent runs, including run IDs for scheduled items.",
+    "",
+    "`/ping`",
+    "Checks that the bot is online.",
+    "",
+    "**Recommended admin workflow**",
+    "1. Ask members to use `/register` before or during the workshop.",
+    "2. Use `/tracking start` for an immediate session or `/tracking schedule` for a later one.",
+    "3. Use `/tracking status` to confirm the run details.",
+    "4. Use `/tracking stop` when the workshop ends.",
+    "5. Open the dashboard to review analytics and download exports."
+  ].join("\n");
+
+async function handleHelp(interaction: ChatInputCommandInteraction) {
+  await interaction.editReply({
+    content: canManageTracking(interaction) ? buildAdminHelpMessage() : buildUserHelpMessage()
+  });
+}
 
 async function handleStart(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId) {
@@ -293,6 +366,11 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       await interaction.editReply({
         content: "Pong! The bot is online and slash commands are working."
       });
+      return;
+    }
+
+    if (interaction.commandName === "help") {
+      await handleHelp(interaction);
       return;
     }
 

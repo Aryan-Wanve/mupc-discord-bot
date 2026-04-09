@@ -562,6 +562,17 @@ const buildServerSelectionPageData = () => {
     grouped.set(session.guild_id, existing);
   }
 
+  for (const registration of registeredUserRepository.list()) {
+    const existing =
+      grouped.get(registration.guild_id) ??
+      { runs: [], participantIds: new Set<string>(), latestActivity: registration.updated_at };
+    existing.participantIds.add(registration.user_id);
+    if (!existing.latestActivity || new Date(registration.updated_at) > new Date(existing.latestActivity)) {
+      existing.latestActivity = registration.updated_at;
+    }
+    grouped.set(registration.guild_id, existing);
+  }
+
   const servers: ServerSummary[] = [...grouped.entries()]
     .map(([guildId, value]) => ({
       guildId,
@@ -675,6 +686,15 @@ const buildUsersPageData = (guildId: string) => {
     }
   }
 
+  for (const registration of registrationMap.values()) {
+    if (!trackedUsers.has(registration.user_id)) {
+      trackedUsers.set(registration.user_id, {
+        user_id: registration.user_id,
+        username: registration.username
+      });
+    }
+  }
+
   const registrations = [...trackedUsers.values()]
     .map((user) => {
       const registration = registrationMap.get(user.user_id);
@@ -718,7 +738,9 @@ const buildUsersPageData = (guildId: string) => {
 const requireGuildContext = (req: Request, res: Response) => {
   const guildId = String(req.params.guildId ?? "");
   const hasData =
-    filterRunsByGuild(guildId).length > 0 || filterSessionsByGuild(guildId).length > 0;
+    filterRunsByGuild(guildId).length > 0 ||
+    filterSessionsByGuild(guildId).length > 0 ||
+    registeredUserRepository.listByGuild(guildId).length > 0;
   if (!guildId || !hasData) {
     res.status(404).send("Server dashboard not found.");
     return null;

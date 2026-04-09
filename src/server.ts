@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { createHash } from "crypto";
 import express, { NextFunction, Request, Response } from "express";
 import path from "path";
+import { discordClient } from "./bot";
 import { config } from "./config";
 import { registeredUserRepository, trackingRunRepository, trackingSessionRepository } from "./db";
 import { formatDateTime, formatDuration, formatPercentage } from "./utils";
@@ -76,8 +77,24 @@ type UserAnalyticsRow = {
   lastSeenDisplay: string;
 };
 
+type ServerSummary = {
+  guildId: string;
+  guildName: string;
+  runCount: number;
+  activeCount: number;
+  trackedParticipants: number;
+  latestActivity: string | null;
+  latestActivityDisplay: string;
+};
+
 const createSnapshot = (value: unknown) =>
   createHash("sha1").update(JSON.stringify(value)).digest("hex").slice(0, 12);
+
+const getGuildName = (guildId: string) => discordClient.guilds.cache.get(guildId)?.name ?? `Server ${guildId}`;
+
+const filterRunsByGuild = (guildId: string) => trackingRunRepository.listByGuild(guildId);
+const filterSessionsByGuild = (guildId: string) =>
+  trackingSessionRepository.listAll().filter((session) => session.guild_id === guildId);
 
 const sanitizeWorksheetName = (name: string) =>
   name.replace(/[:\\/?*\[\]]/g, " ").trim().slice(0, 31) || "Voice Channel";
@@ -318,9 +335,9 @@ const buildRunAnalytics = (runId: number, runStart: string | null, runEnd: strin
   };
 };
 
-const buildUserAnalytics = () => {
-  const runs = trackingRunRepository.list();
-  const sessions = trackingSessionRepository.listAll();
+const buildUserAnalytics = (guildId?: string) => {
+  const runs = guildId ? filterRunsByGuild(guildId) : trackingRunRepository.list();
+  const sessions = guildId ? filterSessionsByGuild(guildId) : trackingSessionRepository.listAll();
   const registrations = new Map(
     registeredUserRepository.list().map((user) => [user.user_id, user.enrollment_no])
   );
@@ -508,8 +525,62 @@ const createWorkbookForRun = (runId: number) => {
   return { run, workbook, summary };
 };
 
-const buildRunsPageData = () => {
-  const runs = trackingRunRepository.list().map((run) => {
+const buildServerSelectionPageData = () => {
+  const runs = trackingRunRepository.list();
+  const grouped = new Map<string, { runs: typeof runs; participantIds: Set<string>; latestActivity: string | null }>();
+
+  for (const run of runs) {
+    const existing =
+      grouped.get(run.guild_id) ??
+      { runs: [], participantIds: new Set<string>(), latestActivity: null };
+    existing.runs.push(run);
+    const activityMarker = run.ended_at ?? run.started_at ?? run.scheduled_start ?? run.created_at;
+    if (!existing.latestActivity || new Date(activityMarker) > new Date(existing.latestActivity)) {
+      existing.latestActivity = activityMarker;
+    }
+    grouped.set(run.guild_id, existing);
+  }
+
+  for (const session of trackingSessionRepository.listAll()) {
+    const existing =
+      grouped.get(session.guild_id) ??
+      { runs: [], participantIds: new Set<string>(), latestActivity: session.joined_at };
+    existing.participantIds.add(session.user_id);
+    if (!existing.latestActivity || new Date(session.joined_at) > new Date(existing.latestActivity)) {
+      existing.latestActivity = session.joined_at;
+    }
+    grouped.set(session.guild_id, existing);
+  }
+
+  const servers: ServerSummary[] = [...grouped.entries()]
+    .map(([guildId, value]) => ({
+      guildId,
+      guildName: getGuildName(guildId),
+      runCount: value.runs.length,
+      activeCount: value.runs.filter((run) => run.is_active).length,
+      trackedParticipants: value.participantIds.size,
+      latestActivity: value.latestActivity,
+      latestActivityDisplay: formatDateTime(value.latestActivity)
+    }))
+    .sort((left, right) => {
+      const leftTime = left.latestActivity ? new Date(left.latestActivity).getTime() : 0;
+      const rightTime = right.latestActivity ? new Date(right.latestActivity).getTime() : 0;
+      return rightTime - leftTime || left.guildName.localeCompare(right.guildName);
+    });
+
+  return {
+    servers,
+    currentPage: "servers",
+    livePage: "servers",
+    liveSnapshot: createSnapshot({
+      runs: trackingRunRepository.list(),
+      sessions: trackingSessionRepository.listAll()
+    })
+  };
+};
+
+const buildRunsPageData = (guildId: string) => {
+  const runs = filterRunsByGuild(guildId).map((run) => {
     const analytics = buildRunAnalytics(run.id, run.started_at, run.ended_at);
 
     return {
@@ -526,29 +597,37 @@ const buildRunsPageData = () => {
   });
 
   return {
+    guildId,
+    guildName: getGuildName(guildId),
+    serverBasePath: `/servers/${guildId}`,
     runs,
     currentPage: "runs",
     livePage: "runs",
     liveSnapshot: createSnapshot({
-      runs: trackingRunRepository.list(),
-      sessions: trackingSessionRepository.listAll()
+      guildId,
+      runs: filterRunsByGuild(guildId),
+      sessions: filterSessionsByGuild(guildId)
     })
   };
 };
 
-const buildRunDetailPageData = (runId: number) => {
+const buildRunDetailPageData = (guildId: string, runId: number) => {
   const run = trackingRunRepository.findById(runId);
-  if (!run) {
+  if (!run || run.guild_id !== guildId) {
     return null;
   }
 
   const analytics = buildRunAnalytics(run.id, run.started_at, run.ended_at);
 
   return {
+    guildId,
+    guildName: getGuildName(guildId),
+    serverBasePath: `/servers/${guildId}`,
     currentPage: "runs",
     livePage: "run-detail",
     liveEntityId: String(run.id),
     liveSnapshot: createSnapshot({
+      guildId,
       run,
       sessions: trackingSessionRepository.listByRun(run.id),
       registrations: registeredUserRepository.list()
@@ -565,16 +644,21 @@ const buildRunDetailPageData = (runId: number) => {
   };
 };
 
-const buildUsersPageData = () => {
-  const users = buildUserAnalytics();
+const buildUsersPageData = (guildId: string) => {
+  const users = buildUserAnalytics(guildId);
+  const sessionsForGuild = filterSessionsByGuild(guildId);
+  const seenUserIds = new Set(sessionsForGuild.map((session) => session.user_id));
 
-  const registrations = registeredUserRepository.list().map((user) => ({
-    ...user,
-    registered_display: formatDateTime(user.registered_at),
-    updated_display: formatDateTime(user.updated_at)
-  }));
+  const registrations = registeredUserRepository
+    .list()
+    .filter((user) => seenUserIds.has(user.user_id))
+    .map((user) => ({
+      ...user,
+      registered_display: formatDateTime(user.registered_at),
+      updated_display: formatDateTime(user.updated_at)
+    }));
 
-  const sessions = trackingSessionRepository.listAll().map((session) => ({
+  const sessions = sessionsForGuild.map((session) => ({
     ...session,
     enrollment_no: registeredUserRepository.findByUserId(session.user_id)?.enrollment_no ?? "Not registered",
     joined_display: formatDateTime(session.joined_at),
@@ -582,27 +666,57 @@ const buildUsersPageData = () => {
   }));
 
   return {
+    guildId,
+    guildName: getGuildName(guildId),
+    serverBasePath: `/servers/${guildId}`,
     users,
     sessions,
     registrations,
     currentPage: "users",
     livePage: "users",
     liveSnapshot: createSnapshot({
-      runs: trackingRunRepository.list(),
-      registrations: registeredUserRepository.list(),
-      sessions: trackingSessionRepository.listAll()
+      guildId,
+      runs: filterRunsByGuild(guildId),
+      registrations,
+      sessions: sessionsForGuild
     })
   };
+};
+
+const requireGuildContext = (req: Request, res: Response) => {
+  const guildId = String(req.params.guildId ?? "");
+  const hasData =
+    filterRunsByGuild(guildId).length > 0 || filterSessionsByGuild(guildId).length > 0;
+  if (!guildId || !hasData) {
+    res.status(404).send("Server dashboard not found.");
+    return null;
+  }
+
+  return guildId;
 };
 
 app.use(requireBasicAuth);
 
 app.get("/", (req, res) => {
-  res.render("index", buildRunsPageData());
+  res.render("servers", buildServerSelectionPageData());
 });
 
-app.get("/runs/:id", (req, res) => {
-  const viewModel = buildRunDetailPageData(Number(req.params.id));
+app.get("/servers/:guildId", (req, res) => {
+  const guildId = requireGuildContext(req, res);
+  if (!guildId) {
+    return;
+  }
+
+  res.render("index", buildRunsPageData(guildId));
+});
+
+app.get("/servers/:guildId/runs/:id", (req, res) => {
+  const guildId = requireGuildContext(req, res);
+  if (!guildId) {
+    return;
+  }
+
+  const viewModel = buildRunDetailPageData(guildId, Number(req.params.id));
   if (!viewModel) {
     return res.status(404).send("Tracking run not found.");
   }
@@ -610,20 +724,30 @@ app.get("/runs/:id", (req, res) => {
   res.render("run-detail", viewModel);
 });
 
-app.get("/users", (req, res) => {
-  res.render("users", buildUsersPageData());
+app.get("/servers/:guildId/users", (req, res) => {
+  const guildId = requireGuildContext(req, res);
+  if (!guildId) {
+    return;
+  }
+
+  res.render("users", buildUsersPageData(guildId));
 });
 
 app.get("/api/dashboard-snapshot", (req, res) => {
   const page = String(req.query.page ?? "");
+  const guildId = String(req.query.guildId ?? "");
   const entityId = req.query.id ? Number(req.query.id) : null;
 
-  if (page === "runs") {
-    return res.json({ snapshot: buildRunsPageData().liveSnapshot });
+  if (page === "servers") {
+    return res.json({ snapshot: buildServerSelectionPageData().liveSnapshot });
   }
 
-  if (page === "run-detail" && entityId) {
-    const viewModel = buildRunDetailPageData(entityId);
+  if (page === "runs" && guildId) {
+    return res.json({ snapshot: buildRunsPageData(guildId).liveSnapshot });
+  }
+
+  if (page === "run-detail" && guildId && entityId) {
+    const viewModel = buildRunDetailPageData(guildId, entityId);
     if (!viewModel) {
       return res.status(404).json({ error: "Tracking run not found." });
     }
@@ -631,15 +755,20 @@ app.get("/api/dashboard-snapshot", (req, res) => {
     return res.json({ snapshot: viewModel.liveSnapshot });
   }
 
-  if (page === "users") {
-    return res.json({ snapshot: buildUsersPageData().liveSnapshot });
+  if (page === "users" && guildId) {
+    return res.json({ snapshot: buildUsersPageData(guildId).liveSnapshot });
   }
 
   return res.status(400).json({ error: "Unknown dashboard page." });
 });
 
-app.get("/users/export.csv", (req, res) => {
-  const users = buildUserAnalytics();
+app.get("/servers/:guildId/users/export.csv", (req, res) => {
+  const guildId = requireGuildContext(req, res);
+  if (!guildId) {
+    return;
+  }
+
+  const users = buildUserAnalytics(guildId);
   const header = [
     "Name",
     "User ID",
@@ -672,13 +801,21 @@ app.get("/users/export.csv", (req, res) => {
   ];
 
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Content-Disposition", "attachment; filename=\"all-user-attendance.csv\"");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${guildId}-user-attendance.csv"`
+  );
   res.send(rows.join("\n"));
 });
 
-app.get("/runs/:id/export.xlsx", async (req, res) => {
+app.get("/servers/:guildId/runs/:id/export.xlsx", async (req, res) => {
+  const guildId = requireGuildContext(req, res);
+  if (!guildId) {
+    return;
+  }
+
   const result = createWorkbookForRun(Number(req.params.id));
-  if (!result) {
+  if (!result || result.run.guild_id !== guildId) {
     return res.status(404).send("Tracking run not found.");
   }
 

@@ -101,8 +101,11 @@ const sanitizeWorksheetName = (name: string) =>
 
 const summarizeRunByChannel = (runId: number, runStart: string | null, runEnd: string | null) => {
   const sessions = trackingSessionRepository.listByRun(runId);
+  const guildId = sessions[0]?.guild_id ?? trackingRunRepository.findById(runId)?.guild_id ?? "";
   const registrations = new Map(
-    registeredUserRepository.list().map((user) => [user.user_id, user.enrollment_no])
+    registeredUserRepository
+      .listByGuild(guildId)
+      .map((user) => [`${user.guild_id}:${user.user_id}`, user.enrollment_no])
   );
   const totalRunSeconds =
     runStart && runEnd
@@ -140,7 +143,7 @@ const summarizeRunByChannel = (runId: number, runStart: string | null, runEnd: s
         channelName: session.channel_name,
         userId: session.user_id,
         username: session.username,
-        enrollmentNo: registrations.get(session.user_id) ?? "Not registered",
+        enrollmentNo: registrations.get(`${session.guild_id}:${session.user_id}`) ?? "Not registered",
         firstJoin: session.joined_at,
         lastLeave: leftAt,
         totalSeconds: durationSeconds,
@@ -339,7 +342,10 @@ const buildUserAnalytics = (guildId?: string) => {
   const runs = guildId ? filterRunsByGuild(guildId) : trackingRunRepository.list();
   const sessions = guildId ? filterSessionsByGuild(guildId) : trackingSessionRepository.listAll();
   const registrations = new Map(
-    registeredUserRepository.list().map((user) => [user.user_id, user.enrollment_no])
+    (guildId ? registeredUserRepository.listByGuild(guildId) : registeredUserRepository.list()).map((user) => [
+      `${user.guild_id}:${user.user_id}`,
+      user.enrollment_no
+    ])
   );
   const runDurations = new Map(
     runs.map((run) => {
@@ -435,7 +441,11 @@ const buildUserAnalytics = (guildId?: string) => {
       return {
         username: user.username,
         userId: user.userId,
-        enrollmentNo: registrations.get(user.userId) ?? "Not registered",
+        enrollmentNo: registrations.get(`${guildId ?? "all"}:${user.userId}`) ??
+          registrations.get(
+            [...registrations.keys()].find((key) => key.endsWith(`:${user.userId}`)) ?? ""
+          ) ??
+          "Not registered",
         totalRunsJoined: user.runIds.size,
         totalSeconds: user.totalSeconds,
         totalDuration: formatDuration(user.totalSeconds),
@@ -630,7 +640,7 @@ const buildRunDetailPageData = (guildId: string, runId: number) => {
       guildId,
       run,
       sessions: trackingSessionRepository.listByRun(run.id),
-      registrations: registeredUserRepository.list()
+      registrations: registeredUserRepository.listByGuild(guildId)
     }),
     run: {
       ...run,
@@ -649,18 +659,40 @@ const buildUsersPageData = (guildId: string) => {
   const sessionsForGuild = filterSessionsByGuild(guildId);
   const seenUserIds = new Set(sessionsForGuild.map((session) => session.user_id));
 
-  const registrations = registeredUserRepository
-    .list()
-    .filter((user) => seenUserIds.has(user.user_id))
-    .map((user) => ({
-      ...user,
-      registered_display: formatDateTime(user.registered_at),
-      updated_display: formatDateTime(user.updated_at)
-    }));
+  const registrationMap = new Map(
+    registeredUserRepository
+      .listByGuild(guildId)
+      .map((user) => [user.user_id, user])
+  );
+  const trackedUsers = new Map<string, { user_id: string; username: string }>();
+
+  for (const session of sessionsForGuild) {
+    if (!trackedUsers.has(session.user_id)) {
+      trackedUsers.set(session.user_id, {
+        user_id: session.user_id,
+        username: session.username
+      });
+    }
+  }
+
+  const registrations = [...trackedUsers.values()]
+    .map((user) => {
+      const registration = registrationMap.get(user.user_id);
+      return {
+        guild_id: guildId,
+        user_id: user.user_id,
+        username: registration?.username ?? user.username,
+        enrollment_no: registration?.enrollment_no ?? "Not registered",
+        registered_display: formatDateTime(registration?.registered_at ?? null),
+        updated_display: formatDateTime(registration?.updated_at ?? null)
+      };
+    })
+    .sort((left, right) => left.username.localeCompare(right.username));
 
   const sessions = sessionsForGuild.map((session) => ({
     ...session,
-    enrollment_no: registeredUserRepository.findByUserId(session.user_id)?.enrollment_no ?? "Not registered",
+    enrollment_no:
+      registeredUserRepository.findByUserId(guildId, session.user_id)?.enrollment_no ?? "Not registered",
     joined_display: formatDateTime(session.joined_at),
     left_display: formatDateTime(session.left_at)
   }));

@@ -347,7 +347,7 @@ h3 {
   display: grid;
   gap: 12px;
   width: 100%;
-  max-width: 380px;
+  max-width: 420px;
   padding: 16px;
   border-radius: 24px;
   background: linear-gradient(180deg, rgba(10, 17, 34, 0.94), rgba(7, 11, 23, 0.98));
@@ -375,26 +375,37 @@ h3 {
 
 .server-card-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
+  min-width: 0;
 }
 
 .server-title-block {
   display: grid;
   gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .server-title-block h3 {
   margin-bottom: 0;
+  line-height: 1.05;
 }
 
-.server-id-label {
+.server-id-line {
   margin: 0;
-  font-size: 0.72rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--accent);
-  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.server-id-line span {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
 }
 
 .server-avatar {

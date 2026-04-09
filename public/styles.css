@@ -93,21 +93,23 @@ body.is-live-refreshing::after {
 
 .floating-home-link {
   position: fixed;
-  top: 18px;
-  left: 18px;
+  right: 22px;
+  bottom: 86px;
   z-index: 45;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 84px;
-  padding: 12px 18px;
-  border-radius: 999px;
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  border-radius: 50%;
   border: 1px solid rgba(98, 230, 255, 0.28);
   background: rgba(8, 13, 28, 0.78);
   color: var(--text);
   text-decoration: none;
+  font-size: 1.45rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  line-height: 1;
   box-shadow:
     0 0 0 1px rgba(98, 230, 255, 0.12),
     0 18px 42px rgba(0, 0, 0, 0.32);
@@ -898,9 +900,10 @@ small {
   }
 
   .floating-home-link {
-    top: 12px;
-    left: 12px;
-    min-width: 74px;
-    padding: 10px 14px;
+    right: 14px;
+    bottom: 72px;
+    width: 52px;
+    height: 52px;
+    font-size: 1.25rem;
   }
 }

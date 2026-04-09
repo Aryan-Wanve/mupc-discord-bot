@@ -229,9 +229,9 @@ const statements = {
       AND left_at IS NULL
   `),
   upsertRegisteredUser: db.prepare(`
-    INSERT INTO registered_users (user_id, username, enrollment_no, registered_at, updated_at)
-    VALUES (@userId, @username, @enrollmentNo, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    ON CONFLICT(user_id) DO UPDATE SET
+    INSERT INTO registered_users (guild_id, user_id, username, enrollment_no, registered_at, updated_at)
+    VALUES (@guildId, @userId, @username, @enrollmentNo, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT(guild_id, user_id) DO UPDATE SET
       username = excluded.username,
       enrollment_no = excluded.enrollment_no,
       updated_at = CURRENT_TIMESTAMP
@@ -239,16 +239,24 @@ const statements = {
   findRegisteredUserById: db.prepare(`
     SELECT *
     FROM registered_users
-    WHERE user_id = ?
+    WHERE guild_id = ?
+      AND user_id = ?
   `),
   findRegisteredUserByEnrollment: db.prepare(`
     SELECT *
     FROM registered_users
-    WHERE enrollment_no = ?
+    WHERE guild_id = ?
+      AND enrollment_no = ?
   `),
   listRegisteredUsers: db.prepare(`
     SELECT *
     FROM registered_users
+    ORDER BY guild_id ASC, username COLLATE NOCASE ASC, user_id ASC
+  `),
+  listRegisteredUsersByGuild: db.prepare(`
+    SELECT *
+    FROM registered_users
+    WHERE guild_id = ?
     ORDER BY username COLLATE NOCASE ASC, user_id ASC
   `),
   listOpenSessionsForActiveRuns: db.prepare(`
@@ -274,17 +282,19 @@ const statements = {
       tracking_sessions.channel_name AS channel_name,
       tracking_sessions.user_id AS user_id,
       MAX(tracking_sessions.username) AS username,
-      registered_users.enrollment_no AS enrollment_no,
+      registrations.enrollment_no AS enrollment_no,
       CAST(SUM(MAX(0, strftime('%s', COALESCE(tracking_sessions.left_at, CURRENT_TIMESTAMP)) - strftime('%s', tracking_sessions.joined_at))) AS INTEGER) AS total_seconds,
       GROUP_CONCAT(
         tracking_sessions.joined_at || ' -> ' || COALESCE(tracking_sessions.left_at, 'ACTIVE'),
         ' | '
       ) AS sessions
     FROM tracking_sessions
-    LEFT JOIN registered_users ON registered_users.user_id = tracking_sessions.user_id
+    LEFT JOIN registered_users AS registrations
+      ON registrations.guild_id = tracking_sessions.guild_id
+     AND registrations.user_id = tracking_sessions.user_id
     WHERE tracking_sessions.tracking_run_id = ?
       AND tracking_sessions.channel_id = ?
-    GROUP BY tracking_sessions.channel_id, tracking_sessions.channel_name, tracking_sessions.user_id, registered_users.enrollment_no
+    GROUP BY tracking_sessions.channel_id, tracking_sessions.channel_name, tracking_sessions.user_id, registrations.enrollment_no
     ORDER BY total_seconds DESC, username COLLATE NOCASE ASC
   `),
   fullReportByRun: db.prepare(`
@@ -293,16 +303,18 @@ const statements = {
       tracking_sessions.channel_name AS channel_name,
       tracking_sessions.user_id AS user_id,
       MAX(tracking_sessions.username) AS username,
-      registered_users.enrollment_no AS enrollment_no,
+      registrations.enrollment_no AS enrollment_no,
       CAST(SUM(MAX(0, strftime('%s', COALESCE(tracking_sessions.left_at, CURRENT_TIMESTAMP)) - strftime('%s', tracking_sessions.joined_at))) AS INTEGER) AS total_seconds,
       GROUP_CONCAT(
         tracking_sessions.joined_at || ' -> ' || COALESCE(tracking_sessions.left_at, 'ACTIVE'),
         ' | '
       ) AS sessions
     FROM tracking_sessions
-    LEFT JOIN registered_users ON registered_users.user_id = tracking_sessions.user_id
+    LEFT JOIN registered_users AS registrations
+      ON registrations.guild_id = tracking_sessions.guild_id
+     AND registrations.user_id = tracking_sessions.user_id
     WHERE tracking_sessions.tracking_run_id = ?
-    GROUP BY tracking_sessions.channel_id, tracking_sessions.channel_name, tracking_sessions.user_id, registered_users.enrollment_no
+    GROUP BY tracking_sessions.channel_id, tracking_sessions.channel_name, tracking_sessions.user_id, registrations.enrollment_no
     ORDER BY tracking_sessions.channel_name COLLATE NOCASE ASC, total_seconds DESC, username COLLATE NOCASE ASC
   `),
   listAllSessions: db.prepare(`
@@ -320,12 +332,14 @@ const statements = {
     SELECT
       tracking_sessions.user_id AS user_id,
       MAX(tracking_sessions.username) AS username,
-      registered_users.enrollment_no AS enrollment_no,
+      registrations.enrollment_no AS enrollment_no,
       CAST(SUM(MAX(0, strftime('%s', COALESCE(left_at, CURRENT_TIMESTAMP)) - strftime('%s', joined_at))) AS INTEGER) AS total_seconds,
       COUNT(*) AS session_count
     FROM tracking_sessions
-    LEFT JOIN registered_users ON registered_users.user_id = tracking_sessions.user_id
-    GROUP BY tracking_sessions.user_id, registered_users.enrollment_no
+    LEFT JOIN registered_users AS registrations
+      ON registrations.guild_id = tracking_sessions.guild_id
+     AND registrations.user_id = tracking_sessions.user_id
+    GROUP BY tracking_sessions.guild_id, tracking_sessions.user_id, registrations.enrollment_no
     ORDER BY total_seconds DESC, username COLLATE NOCASE ASC
   `)
 };
@@ -448,17 +462,20 @@ export const trackingSessionRepository = {
 };
 
 export const registeredUserRepository = {
-  findByUserId(userId: string): RegisteredUserRow | undefined {
-    return statements.findRegisteredUserById.get(userId) as RegisteredUserRow | undefined;
+  findByUserId(guildId: string, userId: string): RegisteredUserRow | undefined {
+    return statements.findRegisteredUserById.get(guildId, userId) as RegisteredUserRow | undefined;
   },
-  findByEnrollment(enrollmentNo: string): RegisteredUserRow | undefined {
-    return statements.findRegisteredUserByEnrollment.get(enrollmentNo) as RegisteredUserRow | undefined;
+  findByEnrollment(guildId: string, enrollmentNo: string): RegisteredUserRow | undefined {
+    return statements.findRegisteredUserByEnrollment.get(guildId, enrollmentNo) as RegisteredUserRow | undefined;
   },
   list(): RegisteredUserRow[] {
     return statements.listRegisteredUsers.all() as RegisteredUserRow[];
   },
-  upsert(input: { userId: string; username: string; enrollmentNo: string }) {
+  listByGuild(guildId: string): RegisteredUserRow[] {
+    return statements.listRegisteredUsersByGuild.all(guildId) as RegisteredUserRow[];
+  },
+  upsert(input: { guildId: string; userId: string; username: string; enrollmentNo: string }) {
     statements.upsertRegisteredUser.run(input);
-    return this.findByUserId(input.userId);
+    return this.findByUserId(input.guildId, input.userId);
   }
 };

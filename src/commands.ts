@@ -2,6 +2,7 @@
 import {
   ChatInputCommandInteraction,
   DiscordAPIError,
+  EmbedBuilder,
   MessageFlags,
   PermissionFlagsBits,
   REST,
@@ -104,17 +105,42 @@ const isUnknownInteractionError = (error: unknown) =>
 const canManageTracking = (interaction: ChatInputCommandInteraction) =>
   interaction.inCachedGuild() && Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 
+const buildEmbed = (input: {
+  title: string;
+  description?: string;
+  color?: number;
+  fields?: Array<{ name: string; value: string; inline?: boolean }>;
+}) =>
+  new EmbedBuilder()
+    .setColor(input.color ?? 0x62e6ff)
+    .setTitle(input.title)
+    .setDescription(input.description ?? null)
+    .setFields(input.fields ?? [])
+    .setTimestamp();
+
 const ensureStaffAccess = async (interaction: ChatInputCommandInteraction) => {
   if (!interaction.inCachedGuild()) {
     await interaction.editReply({
-      content: "This command can only be used inside a Discord server."
+      embeds: [
+        buildEmbed({
+          title: "Server Only Command",
+          description: "This command can only be used inside a Discord server.",
+          color: 0xff7a7a
+        })
+      ]
     });
     return false;
   }
 
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
     await interaction.editReply({
-      content: "You need the Manage Server permission to use MUPC tracking commands."
+      embeds: [
+        buildEmbed({
+          title: "Missing Permission",
+          description: "You need the Manage Server permission to use MUPC tracking commands.",
+          color: 0xff7a7a
+        })
+      ]
     });
     return false;
   }
@@ -139,69 +165,56 @@ const describeRun = (run: {
     `Scheduled: ${run.scheduled_start ?? "Not scheduled"} -> ${run.scheduled_end ?? "Not scheduled"}`
   ].join("\n");
 
-const buildUserHelpMessage = () =>
-  [
-    "**MUPC Attendance Bot Help**",
-    "",
-    "This bot is used for workshop attendance in voice channels.",
-    "",
-    "**What you should use**",
-    "`/register enrollmentno:<your enrollment number>`",
-    "Register your enrollment number so your attendance can be matched correctly in exports.",
-    "",
-    "`/help`",
-    "Shows this guide.",
-    "",
-    "**How attendance works for members**",
-    "Join the workshop voice channel when the session starts.",
-    "Stay in the voice channel while the workshop is running.",
-    "A server admin handles starting, scheduling, and stopping attendance tracking.",
-    "",
-    "**If a workshop is scheduled**",
-    "You do not need to run anything special.",
-    "Just join the correct voice channel at the scheduled time and the bot will track attendance automatically once the admin schedule starts."
-  ].join("\n");
-
-const buildAdminHelpMessage = () =>
-  [
-    "**MUPC Attendance Bot Help**",
-    "",
-    "This bot tracks workshop attendance across the server's voice channels and syncs reports to the dashboard.",
-    "",
-    "**Member command**",
-    "`/register enrollmentno:<student enrollment number>`",
-    "Links a Discord user to an enrollment number for exports.",
-    "",
-    "**Admin commands**",
-    "`/tracking start [title]`",
-    "Starts attendance tracking immediately for all voice channels in this server.",
-    "",
-    "`/tracking stop`",
-    "Stops the currently active tracking run.",
-    "",
-    "`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`",
-    "Schedules a workshop using 24-hour local machine time.",
-    "",
-    "`/tracking cancel runid:<id>`",
-    "Cancels a scheduled run before it starts.",
-    "",
-    "`/tracking status`",
-    "Shows the active run and recent runs, including run IDs for scheduled items.",
-    "",
-    "`/ping`",
-    "Checks that the bot is online.",
-    "",
-    "**Recommended admin workflow**",
-    "1. Ask members to use `/register` before or during the workshop.",
-    "2. Use `/tracking start` for an immediate session or `/tracking schedule` for a later one.",
-    "3. Use `/tracking status` to confirm the run details.",
-    "4. Use `/tracking stop` when the workshop ends.",
-    "5. Open the dashboard to review analytics and download exports."
-  ].join("\n");
-
 async function handleHelp(interaction: ChatInputCommandInteraction) {
   await interaction.editReply({
-    content: canManageTracking(interaction) ? buildAdminHelpMessage() : buildUserHelpMessage()
+    embeds: canManageTracking(interaction)
+      ? [
+          buildEmbed({
+            title: "MUPC Attendance Bot Help",
+            description:
+              "This bot tracks workshop attendance across voice channels and syncs records to the dashboard.",
+            fields: [
+              {
+                name: "Member Command",
+                value:
+                  "`/register enrollmentno:<student enrollment number>`\nLinks a Discord user to an enrollment number for exports."
+              },
+              {
+                name: "Admin Commands",
+                value:
+                  "`/tracking start [title]`\n`/tracking stop`\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\n`/tracking cancel runid:<id>`\n`/tracking status`\n`/ping`"
+              },
+              {
+                name: "Recommended Workflow",
+                value:
+                  "1. Ask members to use `/register`.\n2. Start or schedule tracking.\n3. Check `/tracking status`.\n4. Stop the run when the workshop ends.\n5. Review exports in the dashboard."
+              }
+            ]
+          })
+        ]
+      : [
+          buildEmbed({
+            title: "MUPC Attendance Bot Help",
+            description: "This bot is used for workshop attendance in voice channels.",
+            fields: [
+              {
+                name: "Commands You Need",
+                value:
+                  "`/register enrollmentno:<your enrollment number>`\nRegister once so your attendance is matched correctly.\n\n`/help`\nShows this guide."
+              },
+              {
+                name: "How Attendance Works",
+                value:
+                  "Join the workshop voice channel when the session starts and stay connected while it runs. A server admin handles starting, scheduling, and stopping attendance tracking."
+              },
+              {
+                name: "If A Workshop Is Scheduled",
+                value:
+                  "You do not need to run anything special. Just join the correct voice channel at the scheduled time and the bot will track attendance automatically."
+              }
+            ]
+          })
+        ]
   });
 }
 
@@ -222,9 +235,17 @@ async function handleStart(interaction: ChatInputCommandInteraction) {
 
   const run = await startTrackingForGuild(interaction.guildId, title);
   await interaction.editReply({
-    content:
-      `Started MUPC tracking run #${run.id} (${run.title}). ` +
-      "The bot is now recording attendance across all workshop voice channels."
+    embeds: [
+      buildEmbed({
+        title: "Tracking Started",
+        description: "The bot is now recording attendance across all workshop voice channels.",
+        color: 0x67f0aa,
+        fields: [
+          { name: "Run", value: `#${run.id}`, inline: true },
+          { name: "Title", value: run.title, inline: true }
+        ]
+      })
+    ]
   });
 }
 
@@ -235,7 +256,17 @@ async function handleStop(interaction: ChatInputCommandInteraction) {
 
   const run = await stopTrackingForGuild(interaction.guildId);
   await interaction.editReply({
-    content: `Stopped MUPC tracking run #${run.id} (${run.title}). Attendance exports are ready in the dashboard.`
+    embeds: [
+      buildEmbed({
+        title: "Tracking Stopped",
+        description: "Attendance exports are ready in the dashboard.",
+        color: 0xffb869,
+        fields: [
+          { name: "Run", value: `#${run.id}`, inline: true },
+          { name: "Title", value: run.title, inline: true }
+        ]
+      })
+    ]
   });
 }
 
@@ -257,11 +288,21 @@ async function handleSchedule(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply({
-    content:
-      `Scheduled MUPC workshop #${run.id} (${run.title}) for ${formatScheduleWindow(
-        run.scheduled_start,
-        run.scheduled_end
-      )}. ` + "The bot will start and stop automatically using your local time."
+    embeds: [
+      buildEmbed({
+        title: "Workshop Scheduled",
+        description: "The bot will start and stop automatically using your local time.",
+        color: 0xffd85a,
+        fields: [
+          { name: "Run", value: `#${run.id}`, inline: true },
+          { name: "Title", value: run.title, inline: true },
+          {
+            name: "Time Window",
+            value: formatScheduleWindow(run.scheduled_start, run.scheduled_end)
+          }
+        ]
+      })
+    ]
   });
 }
 
@@ -274,11 +315,20 @@ async function handleCancel(interaction: ChatInputCommandInteraction) {
   const run = await cancelScheduledTrackingForGuild(interaction.guildId, runId);
 
   await interaction.editReply({
-    content:
-      `Cancelled scheduled MUPC workshop #${run.id} (${run.title}) for ${formatScheduleWindow(
-        run.scheduled_start,
-        run.scheduled_end
-      )}.`
+    embeds: [
+      buildEmbed({
+        title: "Scheduled Run Cancelled",
+        color: 0xffb869,
+        fields: [
+          { name: "Run", value: `#${run.id}`, inline: true },
+          { name: "Title", value: run.title, inline: true },
+          {
+            name: "Time Window",
+            value: formatScheduleWindow(run.scheduled_start, run.scheduled_end)
+          }
+        ]
+      })
+    ]
   });
 }
 
@@ -288,26 +338,39 @@ async function handleStatus(interaction: ChatInputCommandInteraction) {
   }
 
   const status = getTrackingStatusForGuild(interaction.guildId);
-  const lines: string[] = [];
+  const activeSummary = status.activeRun
+    ? `#${status.activeRun.id} • ${status.activeRun.title}\nStatus: ${status.activeRun.status}\nStarted: ${
+        status.activeRun.started_at ?? "Not started"
+      }\nScheduled: ${formatScheduleWindow(
+        status.activeRun.scheduled_start,
+        status.activeRun.scheduled_end
+      )}`
+    : "No active run right now.";
+  const recentSummary =
+    status.recentRuns.length === 0
+      ? "No runs yet."
+      : status.recentRuns
+          .slice(0, 5)
+          .map(
+            (run) =>
+              `#${run.id} • ${run.title}\nStatus: ${run.status}\nScheduled: ${formatScheduleWindow(
+                run.scheduled_start,
+                run.scheduled_end
+              )}`
+          )
+          .join("\n\n");
 
-  if (status.activeRun) {
-    lines.push("Active workshop:");
-    lines.push(describeRun(status.activeRun));
-  } else {
-    lines.push("Active run:");
-    lines.push("None");
-  }
-
-  lines.push("");
-    lines.push("Recent workshops:");
-
-  if (status.recentRuns.length === 0) {
-    lines.push("No runs yet.");
-  } else {
-    lines.push(...status.recentRuns.slice(0, 5).map(describeRun));
-  }
-
-  await interaction.editReply({ content: lines.join("\n") });
+  await interaction.editReply({
+    embeds: [
+      buildEmbed({
+        title: "Tracking Status",
+        fields: [
+          { name: "Active Workshop", value: activeSummary },
+          { name: "Recent Runs", value: recentSummary }
+        ]
+      })
+    ]
+  });
 }
 
 async function handleRegister(interaction: ChatInputCommandInteraction) {
@@ -318,7 +381,13 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
   const existingForUser = registeredUserRepository.findByUserId(userId);
   if (existingForUser) {
     await interaction.editReply({
-      content: `You are already registered with enrollment number **${existingForUser.enrollment_no}**.`
+      embeds: [
+        buildEmbed({
+          title: "Already Registered",
+          description: `You are already registered with enrollment number **${existingForUser.enrollment_no}**.`,
+          color: 0xffb869
+        })
+      ]
     });
     return;
   }
@@ -326,7 +395,13 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
   const existingForEnrollment = registeredUserRepository.findByEnrollment(enrollmentNo);
   if (existingForEnrollment) {
     await interaction.editReply({
-      content: "That enrollment number is already registered to another Discord user."
+      embeds: [
+        buildEmbed({
+          title: "Enrollment Number Unavailable",
+          description: "That enrollment number is already registered to another Discord user.",
+          color: 0xff7a7a
+        })
+      ]
     });
     return;
   }
@@ -338,8 +413,13 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply({
-    content:
-      `Registered successfully. Your enrollment number is now saved as **${registered?.enrollment_no ?? enrollmentNo}**.`
+    embeds: [
+      buildEmbed({
+        title: "Registration Complete",
+        description: `Your enrollment number is now saved as **${registered?.enrollment_no ?? enrollmentNo}**.`,
+        color: 0x67f0aa
+      })
+    ]
   });
 }
 
@@ -364,7 +444,13 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
     if (interaction.commandName === "ping") {
       await interaction.editReply({
-        content: "Pong! The bot is online and slash commands are working."
+        embeds: [
+          buildEmbed({
+            title: "Pong",
+            description: "The bot is online and slash commands are working.",
+            color: 0x67f0aa
+          })
+        ]
       });
       return;
     }
@@ -418,7 +504,17 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
     }
 
     if (interaction.replied || interaction.deferred) {
-      await interaction.editReply({ content: message }).catch((replyError) => {
+      await interaction
+        .editReply({
+          embeds: [
+            buildEmbed({
+              title: "Command Failed",
+              description: message,
+              color: 0xff7a7a
+            })
+          ]
+        })
+        .catch((replyError) => {
         if (!isUnknownInteractionError(replyError)) {
           throw replyError;
         }
@@ -426,10 +522,21 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       return;
     }
 
-    await interaction.reply({ content: message, ...privateResponse }).catch((replyError) => {
-      if (!isUnknownInteractionError(replyError)) {
-        throw replyError;
-      }
-    });
+    await interaction
+      .reply({
+        embeds: [
+          buildEmbed({
+            title: "Command Failed",
+            description: message,
+            color: 0xff7a7a
+          })
+        ],
+        ...privateResponse
+      })
+      .catch((replyError) => {
+        if (!isUnknownInteractionError(replyError)) {
+          throw replyError;
+        }
+      });
   }
 }

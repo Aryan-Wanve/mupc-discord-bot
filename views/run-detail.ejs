@@ -9,31 +9,32 @@
   </head>
   <body
     data-live-page="<%= livePage %>"
+    data-live-guild-id="<%= guildId %>"
     data-live-entity-id="<%= liveEntityId %>"
     data-live-snapshot="<%= liveSnapshot %>"
   >
-    <a href="/" class="floating-home-link" aria-label="Go to home dashboard">⌂</a>
+    <a href="/" class="floating-home-link" aria-label="Go to home dashboard">H</a>
     <main class="page">
       <section class="hero">
         <div class="hero-grid">
           <div class="hero-copy">
-            <p class="eyebrow">MUPC Workshop Analysis</p>
+            <p class="eyebrow"><%= guildName %></p>
             <h1><%= run.title %></h1>
             <p class="intro">
-              Drill into voice-based engagement for this MUPC workshop: longest attendees, repeated joiners,
+              Drill into voice-based engagement for this workshop: longest attendees, repeated joiners,
               cross-channel explorers, earliest arrivals, latest leavers, and room-level activity patterns.
             </p>
             <div class="hero-actions">
-              <a href="/" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
-              <a href="/users" class="button-link <%= currentPage === "users" ? "is-active" : "secondary-link" %>">Users DB</a>
-              <a href="/runs/<%= run.id %>/export.xlsx" class="button-link">Download Excel</a>
+              <a href="<%= serverBasePath %>" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
+              <a href="<%= serverBasePath %>/users" class="button-link <%= currentPage === "users" ? "is-active" : "secondary-link" %>">Users DB</a>
+              <a href="<%= serverBasePath %>/runs/<%= run.id %>/export.xlsx" class="button-link">Download Excel</a>
             </div>
           </div>
 
           <aside class="hero-side">
             <div class="mini-card">
               <strong><%= analytics.totalParticipants %></strong>
-              <span>Total club attendees</span>
+              <span>Total attendees</span>
             </div>
             <div class="mini-card">
               <strong><%= analytics.totalChannels %></strong>
@@ -64,8 +65,8 @@
                 <dd><%= run.status %></dd>
               </div>
               <div>
-                <dt>Guild ID</dt>
-                <dd><%= run.guild_id %></dd>
+                <dt>Server</dt>
+                <dd><%= guildName %></dd>
               </div>
               <div>
                 <dt>Created</dt>
@@ -81,7 +82,7 @@
               </div>
               <div>
                 <dt>Voice Scope</dt>
-                <dd>All tracked MUPC voice spaces in the server</dd>
+                <dd>All tracked voice spaces in this server</dd>
               </div>
             </dl>
           </section>
@@ -92,13 +93,13 @@
                 <p class="eyebrow">Leaderboards</p>
                 <h2>Voice engagement graphs</h2>
               </div>
-              <span class="muted-chip">Voice-based workshop signals</span>
+              <span class="muted-chip">Server-scoped workshop signals</span>
             </div>
 
             <div class="analytics-grid">
               <section class="chart-card">
                 <h3>Top attendees</h3>
-                <p class="notes">Longest total voice presence across this MUPC session.</p>
+                <p class="notes">Longest total voice presence across this session.</p>
                 <div class="bar-list">
                   <% analytics.topAttendees.forEach((person) => { %>
                     <div class="bar-row">
@@ -136,7 +137,7 @@
 
               <section class="chart-card">
                 <h3>Cross-channel explorers</h3>
-                <p class="notes">Members who moved across the most club voice spaces.</p>
+                <p class="notes">Members who moved across the most server voice spaces.</p>
                 <div class="bar-list">
                   <% analytics.explorers.forEach((person) => { %>
                     <div class="bar-row">
@@ -155,7 +156,7 @@
 
               <section class="chart-card">
                 <h3>Busiest channels</h3>
-                <p class="notes">Total accumulated attendance time by workshop room.</p>
+                <p class="notes">Total accumulated attendance time by room.</p>
                 <div class="bar-list">
                   <% analytics.channels.forEach((channel) => { %>
                     <div class="bar-row">
@@ -192,7 +193,7 @@
                     <div class="card-header">
                       <div>
                         <h3><%= channel.channelName %></h3>
-                        <p class="notes"><%= channel.rows.length %> attendee(s) • avg <%= channel.averageDuration %></p>
+                        <p class="notes"><%= channel.rows.length %> attendee(s) | avg <%= channel.averageDuration %></p>
                       </div>
                       <span class="muted-chip"><%= channel.totalDuration %></span>
                     </div>
@@ -267,10 +268,11 @@
 
           <section class="card">
             <p class="eyebrow">Interpretation</p>
-            <h2>Club insight lens</h2>
+            <h2>Server insight lens</h2>
             <p class="intro">
-              This page currently measures voice attendance behavior, not text chat. It is best for spotting
-              members who show up early, stay long, come back repeatedly, or explore multiple discussion spaces during MUPC workshops.
+              This page only measures voice attendance behavior for <strong><%= guildName %></strong>.
+              It is best for spotting members who show up early, stay long, come back repeatedly, or
+              explore multiple discussion spaces during workshops.
             </p>
           </section>
         </aside>

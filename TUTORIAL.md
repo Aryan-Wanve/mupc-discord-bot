@@ -4,7 +4,7 @@ This file is meant for club cores and heads who will actually use the bot during
 
 The bot has two parts:
 
-- the Discord bot, which tracks attendance in voice channels
+- the Discord bot, which tracks the attendance in voice channels
 - the dashboard, where the core/head can review and export the records
 
 If you are a student attending a workshop, you will mostly use one command: `/register`.

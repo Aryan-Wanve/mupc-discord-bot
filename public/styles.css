@@ -320,6 +320,95 @@ h3 {
   gap: 18px;
 }
 
+.server-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.server-browser {
+  width: 100%;
+}
+
+.server-grid-compact {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 380px));
+  justify-content: center;
+  align-items: start;
+}
+
+.server-card {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-width: 380px;
+  padding: 16px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(10, 17, 34, 0.94), rgba(7, 11, 23, 0.98));
+  border: 1px solid rgba(110, 147, 255, 0.18);
+  box-shadow: var(--shadow), var(--glow);
+  animation: fadeUp 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.server-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+  box-shadow:
+    0 24px 54px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(98, 230, 255, 0.18),
+    0 0 34px rgba(98, 230, 255, 0.12);
+}
+
+.server-card-top {
+  padding: 2px 2px 0;
+}
+
+.server-bento {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.server-tile {
+  min-height: 82px;
+  padding: 14px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(11, 18, 35, 0.92), rgba(7, 12, 25, 0.98));
+  border: 1px solid rgba(110, 147, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.server-tile-number {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.server-tile-wide {
+  grid-column: 1 / -1;
+  min-height: 72px;
+}
+
+.server-tile-action {
+  grid-column: 1 / -1;
+  min-height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.server-meta-value {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.45;
+  color: var(--text);
+}
+
 .run-card {
   position: relative;
   padding: 18px;
@@ -890,6 +979,19 @@ small {
 
   table {
     min-width: 560px;
+  }
+
+  .server-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .server-bento {
+    grid-template-columns: 1fr;
+  }
+
+  .server-tile-wide,
+  .server-tile-action {
+    grid-column: auto;
   }
 
   .live-toast {

@@ -11,6 +11,7 @@ import {
 import { config } from "./config";
 import { registeredUserRepository } from "./db";
 import {
+  cancelScheduledTrackingForGuild,
   getTrackingStatusForGuild,
   scheduleTrackingForGuild,
   startTrackingForGuild,
@@ -71,6 +72,17 @@ const trackingCommand = new SlashCommandBuilder()
         option
           .setName("end")
           .setDescription("End time in 24-hour format, for example 09:00")
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("cancel")
+      .setDescription("Cancel a scheduled MUPC workshop tracking run before it starts.")
+      .addIntegerOption((option) =>
+        option
+          .setName("runid")
+          .setDescription("The scheduled run ID shown in /tracking status")
           .setRequired(true)
       )
   )
@@ -177,6 +189,23 @@ async function handleSchedule(interaction: ChatInputCommandInteraction) {
         run.scheduled_start,
         run.scheduled_end
       )}. ` + "The bot will start and stop automatically using your local time."
+  });
+}
+
+async function handleCancel(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId) {
+    throw new Error("This command must be used inside a server.");
+  }
+
+  const runId = interaction.options.getInteger("runid", true);
+  const run = await cancelScheduledTrackingForGuild(interaction.guildId, runId);
+
+  await interaction.editReply({
+    content:
+      `Cancelled scheduled MUPC workshop #${run.id} (${run.title}) for ${formatScheduleWindow(
+        run.scheduled_start,
+        run.scheduled_end
+      )}.`
   });
 }
 
@@ -293,6 +322,11 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
     if (subcommand === "schedule") {
       await handleSchedule(interaction);
+      return;
+    }
+
+    if (subcommand === "cancel") {
+      await handleCancel(interaction);
       return;
     }
 

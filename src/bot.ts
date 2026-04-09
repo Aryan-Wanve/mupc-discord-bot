@@ -17,7 +17,7 @@ import { config } from "./config";
 import { AttendanceTracker } from "./attendanceTracker";
 import { trackingRunRepository } from "./db";
 import { handleSlashCommand, registerSlashCommands } from "./commands";
-import { nowIso } from "./utils";
+import { formatScheduleWindow, nowIso } from "./utils";
 
 const tracker = new AttendanceTracker();
 const schedulerIntervalMs = 15_000;
@@ -342,7 +342,10 @@ export async function scheduleTrackingForGuild(input: {
 
   await sendGuildLog(
     input.guildId,
-    `Scheduled **${input.title}** for MUPC from **${input.scheduledStart}** to **${input.scheduledEnd}**.`
+    `Scheduled **${input.title}** for **${formatScheduleWindow(
+      input.scheduledStart,
+      input.scheduledEnd
+    )}**.`
   );
 
   return run;

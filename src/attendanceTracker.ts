@@ -15,6 +15,10 @@ export class AttendanceTracker {
     }
   }
 
+  getTrackedUserCount() {
+    return this.openSessions.size;
+  }
+
   startTracking(input: {
     runId: number;
     guildId: string;

@@ -753,6 +753,11 @@ const requireGuildContext = (req: Request, res: Response) => {
   return guildId;
 };
 
+// Public health endpoint for Railway and other uptime checks.
+app.get("/health", (_req, res) => {
+  res.status(200).json({ ok: true });
+});
+
 app.use(requireBasicAuth);
 
 app.get("/", (req, res) => {

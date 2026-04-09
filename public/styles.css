@@ -13,6 +13,7 @@
   --accent-soft: rgba(98, 230, 255, 0.14);
   --success: #67f0aa;
   --warning: #ffb869;
+  --warning-strong: #ffd85a;
   --shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
   --glow: 0 0 0 1px rgba(98, 230, 255, 0.18), 0 0 28px rgba(98, 230, 255, 0.12);
   --font-display:
@@ -85,11 +86,20 @@ body::after {
   animation: ambientShift 22s ease-in-out infinite alternate;
 }
 
+body.is-live-refreshing::after {
+  opacity: 0.9;
+  filter: blur(18px);
+}
+
 .page {
   width: min(1780px, calc(100% - 28px));
   margin: 0 auto;
   padding: 20px 0 72px;
   animation: pageRise 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body.has-live-update .page {
+  animation: liveRefreshIn 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hero,
@@ -488,6 +498,13 @@ button:hover {
   border-color: rgba(255, 184, 105, 0.18);
 }
 
+.status.scheduled {
+  color: #3b2b00;
+  background: linear-gradient(135deg, rgba(255, 216, 90, 0.95), rgba(255, 184, 105, 0.94));
+  border-color: rgba(255, 216, 90, 0.5);
+  box-shadow: 0 0 22px rgba(255, 216, 90, 0.28);
+}
+
 .report {
   margin-top: 20px;
 }
@@ -641,6 +658,44 @@ small {
   font-size: 0.9rem;
 }
 
+.live-toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 40;
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(98, 230, 255, 0.2);
+  background: rgba(8, 13, 28, 0.86);
+  color: var(--text);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(18px);
+  transform: translateY(14px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.live-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.live-toast[data-state="updated"] {
+  border-color: rgba(103, 240, 170, 0.34);
+  box-shadow:
+    0 0 0 1px rgba(103, 240, 170, 0.16),
+    0 20px 44px rgba(0, 0, 0, 0.32);
+}
+
+.live-toast[data-state="error"] {
+  border-color: rgba(255, 184, 105, 0.34);
+}
+
 .hero-actions .button-link,
 .actions .button-link {
   animation: fadeUp 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -693,6 +748,20 @@ small {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes liveRefreshIn {
+  from {
+    opacity: 0.72;
+    transform: translateY(8px);
+    filter: saturate(0.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: saturate(1);
   }
 }
 
@@ -782,5 +851,12 @@ small {
 
   table {
     min-width: 560px;
+  }
+
+  .live-toast {
+    right: 14px;
+    bottom: 14px;
+    left: 14px;
+    text-align: center;
   }
 }

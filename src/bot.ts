@@ -237,7 +237,7 @@ async function handleVoiceStateChange(oldState: VoiceState, newState: VoiceState
   updateBotBio();
 }
 
-discordClient.once("ready", async () => {
+discordClient.once("clientReady", async () => {
   tracker.hydrateFromDatabase();
   updateBotBio();
 
@@ -273,7 +273,11 @@ discordClient.on("interactionCreate", async (interaction: Interaction) => {
     return;
   }
 
-  await handleSlashCommand(interaction);
+  try {
+    await handleSlashCommand(interaction);
+  } catch (error) {
+    console.error("Unhandled slash command error:", error);
+  }
 });
 
 discordClient.on("voiceStateUpdate", async (oldState, newState) => {

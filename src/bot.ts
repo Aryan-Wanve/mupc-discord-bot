@@ -3,6 +3,7 @@ import {
   ActivityType,
   ChannelType,
   Client,
+  EmbedBuilder,
   GatewayIntentBits,
   Guild,
   GuildBasedChannel,
@@ -107,7 +108,29 @@ async function ensureLogChannel(guild: Guild) {
   }
 }
 
-async function sendGuildLog(guildId: string, message: string) {
+function buildLogEmbed(input: {
+  title: string;
+  description?: string;
+  color?: number;
+  fields?: Array<{ name: string; value: string; inline?: boolean }>;
+}) {
+  return new EmbedBuilder()
+    .setColor(input.color ?? 0x62e6ff)
+    .setTitle(input.title)
+    .setDescription(input.description ?? null)
+    .setFields(input.fields ?? [])
+    .setTimestamp();
+}
+
+async function sendGuildLog(
+  guildId: string,
+  input: {
+    title: string;
+    description?: string;
+    color?: number;
+    fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  }
+) {
   const guild = await discordClient.guilds.fetch(guildId).catch(() => null);
   if (!guild) {
     return;
@@ -115,7 +138,7 @@ async function sendGuildLog(guildId: string, message: string) {
 
   const channel = await ensureLogChannel(guild).catch(() => null);
   if (channel && channel.isTextBased()) {
-    await channel.send(message).catch(() => undefined);
+    await channel.send({ embeds: [buildLogEmbed(input)] }).catch(() => undefined);
   }
 }
 
@@ -166,7 +189,15 @@ async function activateRun(runId: number) {
     syncRunAcrossGuild(run.id, guild);
     await sendGuildLog(
       guild.id,
-      `MUPC workshop tracking started for **${run.title}**. Voice attendance is now being recorded across all voice channels.`
+      {
+        title: "Tracking Started",
+        description: "Voice attendance is now being recorded across all voice channels.",
+        color: 0x67f0aa,
+        fields: [
+          { name: "Run", value: `#${run.id}`, inline: true },
+          { name: "Title", value: run.title, inline: true }
+        ]
+      }
     );
   }
 }
@@ -183,7 +214,15 @@ async function completeRun(runId: number, status = "completed") {
 
   await sendGuildLog(
     run.guild_id,
-    `MUPC workshop tracking stopped for **${run.title}**. Open the dashboard to download attendance exports and insights.`
+    {
+      title: "Tracking Stopped",
+      description: "Open the dashboard to download attendance exports and insights.",
+      color: 0xffb869,
+      fields: [
+        { name: "Run", value: `#${run.id}`, inline: true },
+        { name: "Title", value: run.title, inline: true }
+      ]
+    }
   );
 }
 
@@ -197,9 +236,15 @@ async function checkScheduledRuns() {
       trackingRunRepository.markCompleted(run.id, current, "failed");
       await sendGuildLog(
         run.guild_id,
-        `Scheduled workshop tracking for **${run.title}** could not start: ${
-          error instanceof Error ? error.message : "unknown error"
-        }`
+        {
+          title: "Scheduled Tracking Failed",
+          description: error instanceof Error ? error.message : "Unknown error",
+          color: 0xff7a7a,
+          fields: [
+            { name: "Run", value: `#${run.id}`, inline: true },
+            { name: "Title", value: run.title, inline: true }
+          ]
+        }
       );
     }
   }
@@ -313,7 +358,15 @@ export async function startTrackingForGuild(guildId: string, title: string) {
   syncRunAcrossGuild(run.id, guild);
   await sendGuildLog(
     guildId,
-    `MUPC workshop tracking started for **${run.title}**. Voice attendance is now being recorded across all voice channels.`
+    {
+      title: "Tracking Started",
+      description: "Voice attendance is now being recorded across all voice channels.",
+      color: 0x67f0aa,
+      fields: [
+        { name: "Run", value: `#${run.id}`, inline: true },
+        { name: "Title", value: run.title, inline: true }
+      ]
+    }
   );
 
   return run;
@@ -342,10 +395,17 @@ export async function scheduleTrackingForGuild(input: {
 
   await sendGuildLog(
     input.guildId,
-    `Scheduled **${input.title}** for **${formatScheduleWindow(
-      input.scheduledStart,
-      input.scheduledEnd
-    )}**.`
+    {
+      title: "Workshop Scheduled",
+      color: 0xffd85a,
+      fields: [
+        { name: "Title", value: input.title },
+        {
+          name: "Time Window",
+          value: formatScheduleWindow(input.scheduledStart, input.scheduledEnd)
+        }
+      ]
+    }
   );
 
   return run;
@@ -372,10 +432,18 @@ export async function cancelScheduledTrackingForGuild(guildId: string, runId: nu
 
   await sendGuildLog(
     guildId,
-    `Cancelled scheduled workshop tracking for **${run.title}** that was set for **${formatScheduleWindow(
-      run.scheduled_start,
-      run.scheduled_end
-    )}**.`
+    {
+      title: "Scheduled Run Cancelled",
+      color: 0xffb869,
+      fields: [
+        { name: "Run", value: `#${run.id}`, inline: true },
+        { name: "Title", value: run.title, inline: true },
+        {
+          name: "Time Window",
+          value: formatScheduleWindow(run.scheduled_start, run.scheduled_end)
+        }
+      ]
+    }
   );
 
   return run;

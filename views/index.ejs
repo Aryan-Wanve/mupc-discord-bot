@@ -7,7 +7,7 @@
     <title>Attendance Runs</title>
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
-  <body>
+  <body data-live-page="<%= livePage %>" data-live-snapshot="<%= liveSnapshot %>">
     <main class="page">
       <section class="hero">
         <div class="hero-grid">
@@ -67,7 +67,9 @@
                           <p class="eyebrow">Run #<%= run.id %></p>
                           <h3><%= run.title %></h3>
                         </div>
-                        <span class="status <%= run.is_active ? "live" : "idle" %>"><%= run.status %></span>
+                        <span
+                          class="status <%= run.is_active ? "live" : run.status === "scheduled" ? "scheduled" : "idle" %>"
+                        ><%= run.status %></span>
                       </div>
                     </div>
 
@@ -140,5 +142,6 @@
         </aside>
       </section>
     </main>
+    <script src="/assets/dashboard-live.js"></script>
   </body>
 </html>

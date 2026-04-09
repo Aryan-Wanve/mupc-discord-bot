@@ -4,6 +4,7 @@ const body = document.body;
 const livePage = body.dataset.livePage;
 const liveSnapshot = body.dataset.liveSnapshot;
 const liveEntityId = body.dataset.liveEntityId;
+const liveGuildId = body.dataset.liveGuildId;
 
 if (livePage && liveSnapshot) {
   let currentSnapshot = liveSnapshot;
@@ -74,6 +75,9 @@ if (livePage && liveSnapshot) {
 
     try {
       const query = new URLSearchParams({ page: livePage });
+      if (liveGuildId) {
+        query.set("guildId", liveGuildId);
+      }
       if (liveEntityId) {
         query.set("id", liveEntityId);
       }

@@ -64,6 +64,34 @@ export const formatDateTime = (value: string | null) => {
   });
 };
 
+export const formatScheduleWindow = (startValue: string | null, endValue: string | null) => {
+  if (!startValue || !endValue) {
+    return "Not scheduled";
+  }
+
+  const start = new Date(startValue);
+  const end = new Date(endValue);
+  const sameDay = start.toDateString() === end.toDateString();
+
+  const dateFormatter = new Intl.DateTimeFormat("en-IN", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit"
+  });
+
+  const timeFormatter = new Intl.DateTimeFormat("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+
+  if (sameDay) {
+    return `${dateFormatter.format(start)}, ${timeFormatter.format(start)} to ${timeFormatter.format(end)}`;
+  }
+
+  return `${dateFormatter.format(start)}, ${timeFormatter.format(start)} to ${dateFormatter.format(end)}, ${timeFormatter.format(end)}`;
+};
+
 export const formatPercentage = (numerator: number, denominator: number) => {
   if (denominator <= 0) {
     return "0.00%";

@@ -70,8 +70,7 @@
                       <% } %>
                       <div class="server-title-block">
                         <h3><%= server.guildName %></h3>
-                        <p class="server-id-label">Guild ID</p>
-                        <p class="notes"><%= server.guildId %></p>
+                        <p class="server-id-line">Guild ID: <span><%= server.guildId %></span></p>
                       </div>
                     </div>
                     <span class="status <%= server.activeCount > 0 ? "live" : "idle" %>">

@@ -16,7 +16,7 @@ import {
   startTrackingForGuild,
   stopTrackingForGuild
 } from "./bot";
-import { parseTodayTimeRange } from "./utils";
+import { formatScheduleWindow, parseTodayTimeRange } from "./utils";
 
 const pingCommand = new SlashCommandBuilder()
   .setName("ping")
@@ -173,8 +173,10 @@ async function handleSchedule(interaction: ChatInputCommandInteraction) {
 
   await interaction.editReply({
     content:
-      `Scheduled MUPC workshop #${run.id} (${run.title}) from ${start} to ${end}. ` +
-      "The bot will start and stop automatically using the machine's local time."
+      `Scheduled MUPC workshop #${run.id} (${run.title}) for ${formatScheduleWindow(
+        run.scheduled_start,
+        run.scheduled_end
+      )}. ` + "The bot will start and stop automatically using your local time."
   });
 }
 

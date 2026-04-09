@@ -34,7 +34,10 @@ export const discordClient = new Client({
 });
 
 const getDisplayName = (state: VoiceState) =>
-  state.member?.user.globalName ?? state.member?.user.username ?? state.id;
+  state.member?.displayName ??
+  state.member?.user.globalName ??
+  state.member?.user.username ??
+  state.id;
 
 function updateBotBio() {
   if (!discordClient.user) {
@@ -162,7 +165,7 @@ function syncRunAcrossGuild(runId: number, guild: Guild) {
         channelId: channel.id,
         channelName: channel.name,
         userId: memberId,
-        username: member.user.globalName ?? member.user.username
+        username: member.displayName ?? member.user.globalName ?? member.user.username
       });
     }
   }

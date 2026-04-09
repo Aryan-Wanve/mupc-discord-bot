@@ -4,32 +4,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Users Database</title>
+    <title><%= guildName %> Users Database</title>
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
-  <body data-live-page="<%= livePage %>" data-live-snapshot="<%= liveSnapshot %>">
-    <a href="/" class="floating-home-link" aria-label="Go to home dashboard">⌂</a>
+  <body
+    data-live-page="<%= livePage %>"
+    data-live-guild-id="<%= guildId %>"
+    data-live-snapshot="<%= liveSnapshot %>"
+  >
+    <a href="/" class="floating-home-link" aria-label="Go to home dashboard">H</a>
     <main class="page">
       <section class="hero">
         <div class="hero-grid">
           <div class="hero-copy">
-            <p class="eyebrow">MUPC Member Registry</p>
-            <h1>Workshop attendance history for every club member.</h1>
+            <p class="eyebrow"><%= guildName %></p>
+            <h1>Workshop attendance history for this server.</h1>
             <p class="intro">
-              Inspect MUPC registration data, workshop participation history, average attendance depth,
-              and the raw voice records that power the export sheets.
+              Inspect registration data, participation history, average attendance depth, and the raw
+              voice records that power exports for this server only.
             </p>
             <div class="hero-actions">
-              <a href="/" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
-              <a href="/users" class="button-link <%= currentPage === "users" ? "is-active" : "secondary-link" %>">Users DB</a>
-              <a href="/users/export.csv" class="button-link">Download Users CSV</a>
+              <a href="<%= serverBasePath %>" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
+              <a href="<%= serverBasePath %>/users" class="button-link <%= currentPage === "users" ? "is-active" : "secondary-link" %>">Users DB</a>
+              <a href="<%= serverBasePath %>/users/export.csv" class="button-link">Download Users CSV</a>
             </div>
           </div>
 
           <aside class="hero-side">
             <div class="mini-card">
               <strong><%= registrations.length %></strong>
-              <span>Registered users</span>
+              <span>Registered users in this server</span>
             </div>
             <div class="mini-card">
               <strong><%= users.length %></strong>
@@ -51,11 +55,11 @@
                 <p class="eyebrow">Registry</p>
                 <h2>Registered users</h2>
               </div>
-              <span class="muted-chip">Enrollment-linked identities</span>
+              <span class="muted-chip"><%= guildName %></span>
             </div>
 
             <% if (registrations.length === 0) { %>
-              <p class="empty-inline">No users have registered an enrollment number yet.</p>
+              <p class="empty-inline">No users with tracked attendance are registered yet for this server.</p>
             <% } else { %>
               <div class="table-wrap">
                 <table>
@@ -92,7 +96,7 @@
             </div>
 
             <% if (sessions.length === 0) { %>
-              <p class="empty-inline">No raw session data yet.</p>
+              <p class="empty-inline">No raw session data yet for this server.</p>
             <% } else { %>
               <div class="table-wrap">
                 <table>
@@ -131,10 +135,10 @@
                 <p class="eyebrow">Totals</p>
                 <h2>User attendance summary</h2>
               </div>
-              <span class="muted-chip">Cross-webinar candidate summary</span>
+              <span class="muted-chip">Server-only summary</span>
             </div>
             <% if (users.length === 0) { %>
-              <p class="empty-inline">No tracked users yet.</p>
+              <p class="empty-inline">No tracked users yet for this server.</p>
             <% } else { %>
               <div class="table-wrap">
                 <table>
@@ -170,7 +174,7 @@
             <h2>Registration rule</h2>
             <p class="intro">
               Each Discord user can register exactly one enrollment number using <strong>/register</strong>.
-              If they try again later, the bot tells them they are already registered.
+              This page only shows people who appear in attendance data for <strong><%= guildName %></strong>.
             </p>
             <div class="stats-grid">
               <div class="stat-box">
@@ -187,7 +191,7 @@
               </div>
               <div class="stat-box">
                 <div class="stat-label">Analytics</div>
-                <div class="stat-value">Cross-run</div>
+                <div class="stat-value">Per server</div>
               </div>
             </div>
           </section>

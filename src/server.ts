@@ -759,6 +759,27 @@ const buildUsersPageData = async (guildId: string) => {
   };
 };
 
+const buildUsersExportRows = async (guildId: string) => {
+  const pageData = await buildUsersPageData(guildId);
+  const analyticsByUserId = new Map(pageData.users.map((user) => [user.userId, user]));
+
+  return pageData.registrations.map((registration) => {
+    const analytics = analyticsByUserId.get(registration.user_id);
+
+    return {
+      username: registration.username,
+      userId: registration.user_id,
+      enrollmentNo: registration.enrollment_no,
+      totalRunsJoined: analytics?.totalRunsJoined ?? 0,
+      averagePercentage: analytics?.averagePercentage ?? "0.0%",
+      totalDuration: analytics?.totalDuration ?? formatDuration(0),
+      totalSessions: analytics?.totalSessions ?? 0,
+      firstSeenDisplay: analytics?.firstSeenDisplay ?? "Not tracked",
+      lastSeenDisplay: analytics?.lastSeenDisplay ?? "Not tracked"
+    };
+  });
+};
+
 const requireGuildContext = (req: Request, res: Response) => {
   const guildId = String(req.params.guildId ?? "");
   const hasData =
@@ -852,13 +873,13 @@ app.get("/api/dashboard-snapshot", async (req, res) => {
   return res.status(400).json({ error: "Unknown dashboard page." });
 });
 
-app.get("/servers/:guildId/users/export.csv", (req, res) => {
+app.get("/servers/:guildId/users/export.csv", async (req, res) => {
   const guildId = requireGuildContext(req, res);
   if (!guildId) {
     return;
   }
 
-  const users = buildUserAnalytics(guildId);
+  const users = await buildUsersExportRows(guildId);
   const header = [
     "Name",
     "User ID",

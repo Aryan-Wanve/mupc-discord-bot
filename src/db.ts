@@ -276,6 +276,11 @@ const statements = {
     WHERE guild_id = ?
     ORDER BY username COLLATE NOCASE ASC, user_id ASC
   `),
+  deleteRegisteredUserById: db.prepare(`
+    DELETE FROM registered_users
+    WHERE guild_id = @guildId
+      AND user_id = @userId
+  `),
   listOpenSessionsForActiveRuns: db.prepare(`
     SELECT sessions.*
     FROM tracking_sessions AS sessions
@@ -490,6 +495,10 @@ export const registeredUserRepository = {
   },
   listByGuild(guildId: string): RegisteredUserRow[] {
     return statements.listRegisteredUsersByGuild.all(guildId) as RegisteredUserRow[];
+  },
+  deleteByUserId(guildId: string, userId: string) {
+    const result = statements.deleteRegisteredUserById.run({ guildId, userId });
+    return result.changes > 0;
   },
   upsert(input: { guildId: string; userId: string; username: string; enrollmentNo: string }) {
     statements.upsertRegisteredUser.run(input);

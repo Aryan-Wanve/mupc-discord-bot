@@ -103,24 +103,46 @@ const listKnownGuildMembers = async (guildId: string) => {
   const guild =
     discordClient.guilds.cache.get(guildId) ?? (await discordClient.guilds.fetch(guildId).catch(() => null));
   if (!guild) {
-    return [] as Array<{ user_id: string; username: string }>;
+    return [] as Array<{ user_id: string; server_username: string; discord_username: string }>;
   }
 
   const members = await guild.members.fetch().catch(() => null);
   if (!members) {
-    return [] as Array<{ user_id: string; username: string }>;
+    return [] as Array<{ user_id: string; server_username: string; discord_username: string }>;
   }
 
   return [...members.values()]
     .filter((member) => !member.user.bot)
     .map((member) => ({
       user_id: member.id,
-      username: member.displayName ?? member.user.globalName ?? member.user.username
+      server_username: member.displayName ?? member.user.globalName ?? member.user.username,
+      discord_username: member.user.username
     }));
 };
 
 const sanitizeWorksheetName = (name: string) =>
   name.replace(/[:\\/?*\[\]]/g, " ").trim().slice(0, 31) || "Voice Channel";
+
+const autoFitWorksheetColumns = (sheet: ExcelJS.Worksheet, minimumWidth = 12) => {
+  sheet.columns.forEach((column) => {
+    let maxLength = minimumWidth;
+    if (!column.eachCell) {
+      column.width = minimumWidth;
+      return;
+    }
+
+    column.eachCell({ includeEmpty: true }, (cell) => {
+      const rawValue = cell.value;
+      const text =
+        typeof rawValue === "object" && rawValue !== null && "richText" in rawValue
+          ? rawValue.richText.map((part) => part.text).join("")
+          : String(rawValue ?? "");
+      maxLength = Math.max(maxLength, text.length + 2);
+    });
+
+    column.width = Math.min(maxLength, 40);
+  });
+};
 
 const summarizeRunByChannel = (runId: number, runStart: string | null, runEnd: string | null) => {
   const sessions = trackingSessionRepository.listByRun(runId);
@@ -699,23 +721,32 @@ const buildUsersPageData = async (guildId: string) => {
       .listByGuild(guildId)
       .map((user) => [user.user_id, user])
   );
-  const trackedUsers = new Map<string, { user_id: string; username: string }>();
+  const trackedUsers = new Map<
+    string,
+    { user_id: string; username: string; discord_username: string }
+  >();
 
   for (const member of guildMembers) {
-    trackedUsers.set(member.user_id, member);
+    trackedUsers.set(member.user_id, {
+      user_id: member.user_id,
+      username: member.server_username,
+      discord_username: member.discord_username
+    });
   }
 
   for (const session of sessionsForGuild) {
     trackedUsers.set(session.user_id, {
       user_id: session.user_id,
-      username: trackedUsers.get(session.user_id)?.username ?? session.username
+      username: trackedUsers.get(session.user_id)?.username ?? session.username,
+      discord_username: trackedUsers.get(session.user_id)?.discord_username ?? session.username
     });
   }
 
   for (const registration of registrationMap.values()) {
     trackedUsers.set(registration.user_id, {
       user_id: registration.user_id,
-      username: trackedUsers.get(registration.user_id)?.username ?? registration.username
+      username: trackedUsers.get(registration.user_id)?.username ?? registration.username,
+      discord_username: trackedUsers.get(registration.user_id)?.discord_username ?? registration.username
     });
   }
 
@@ -762,14 +793,19 @@ const buildUsersPageData = async (guildId: string) => {
 const buildUsersExportRows = async (guildId: string) => {
   const pageData = await buildUsersPageData(guildId);
   const analyticsByUserId = new Map(pageData.users.map((user) => [user.userId, user]));
+  const knownMembers = await listKnownGuildMembers(guildId);
+  const memberMap = new Map(knownMembers.map((member) => [member.user_id, member]));
 
   return pageData.registrations.map((registration) => {
     const analytics = analyticsByUserId.get(registration.user_id);
+    const member = memberMap.get(registration.user_id);
 
     return {
-      username: registration.username,
+      serverUsername: member?.server_username ?? registration.username,
+      discordUsername: member?.discord_username ?? registration.username,
       userId: registration.user_id,
       enrollmentNo: registration.enrollment_no,
+      status: registration.enrollment_no === "Not registered" ? "Unregistered" : "Registered",
       totalRunsJoined: analytics?.totalRunsJoined ?? 0,
       averagePercentage: analytics?.averagePercentage ?? "0.0%",
       totalDuration: analytics?.totalDuration ?? formatDuration(0),
@@ -778,6 +814,64 @@ const buildUsersExportRows = async (guildId: string) => {
       lastSeenDisplay: analytics?.lastSeenDisplay ?? "Not tracked"
     };
   });
+};
+
+const createWorkbookForUsers = async (guildId: string) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "MUPC Attendance Bot";
+  workbook.created = new Date();
+
+  const guildName = getGuildName(guildId);
+  const rows = await buildUsersExportRows(guildId);
+  const sheet = workbook.addWorksheet(sanitizeWorksheetName(`${guildName} Users`));
+
+  const header = [
+    "Server Username",
+    "Discord Username",
+    "User ID",
+    "Enrollment No",
+    "Status",
+    "Total Workshops Joined",
+    "Average Percentage of Duration",
+    "Total Duration (HH:MM:SS)",
+    "Total Sessions",
+    "First Seen",
+    "Last Seen"
+  ];
+
+  sheet.addRow(header);
+
+  for (const row of rows) {
+    sheet.addRow([
+      row.serverUsername,
+      row.discordUsername,
+      row.userId,
+      row.enrollmentNo,
+      row.status,
+      row.totalRunsJoined,
+      row.averagePercentage,
+      row.totalDuration,
+      row.totalSessions,
+      row.firstSeenDisplay,
+      row.lastSeenDisplay
+    ]);
+  }
+
+  sheet.getRow(1).font = { bold: true };
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  sheet.getColumn(3).numFmt = "@";
+
+  sheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) {
+      return;
+    }
+
+    row.getCell(3).value = String(row.getCell(3).value ?? "");
+  });
+
+  autoFitWorksheetColumns(sheet);
+
+  return workbook;
 };
 
 const requireGuildContext = (req: Request, res: Response) => {
@@ -873,50 +967,38 @@ app.get("/api/dashboard-snapshot", async (req, res) => {
   return res.status(400).json({ error: "Unknown dashboard page." });
 });
 
+const sendUsersWorkbook = async (guildId: string, res: Response) => {
+  const workbook = await createWorkbookForUsers(guildId);
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${guildId}-user-attendance.xlsx"`
+  );
+
+  await workbook.xlsx.write(res);
+  res.end();
+};
+
 app.get("/servers/:guildId/users/export.csv", async (req, res) => {
   const guildId = requireGuildContext(req, res);
   if (!guildId) {
     return;
   }
 
-  const users = await buildUsersExportRows(guildId);
-  const header = [
-    "Name",
-    "User ID",
-    "Enrollment No",
-    "Total Workshops Joined",
-    "Average Percentage of Duration",
-    "Total Duration",
-    "Total Sessions",
-    "First Seen",
-    "Last Seen"
-  ];
+  await sendUsersWorkbook(guildId, res);
+});
 
-  const rows = [
-    header.join(","),
-    ...users.map((user) =>
-      [
-        user.username,
-        user.userId,
-        user.enrollmentNo,
-        user.totalRunsJoined,
-        user.averagePercentage,
-        user.totalDuration,
-        user.totalSessions,
-        user.firstSeenDisplay,
-        user.lastSeenDisplay
-      ]
-        .map((value) => `"${String(value).replace(/"/g, "\"\"")}"`)
-        .join(",")
-    )
-  ];
+app.get("/servers/:guildId/users/export.xlsx", async (req, res) => {
+  const guildId = requireGuildContext(req, res);
+  if (!guildId) {
+    return;
+  }
 
-  res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="${guildId}-user-attendance.csv"`
-  );
-  res.send(rows.join("\n"));
+  await sendUsersWorkbook(guildId, res);
 });
 
 app.get("/servers/:guildId/runs/:id/export.xlsx", async (req, res) => {

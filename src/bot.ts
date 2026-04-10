@@ -286,6 +286,7 @@ async function handleVoiceStateChange(oldState: VoiceState, newState: VoiceState
 }
 
 discordClient.once("clientReady", async () => {
+  console.log(`[Discord] Client ready as ${discordClient.user?.tag ?? "unknown-user"}`);
   tracker.hydrateFromDatabase();
   updateBotBio();
 
@@ -302,7 +303,9 @@ discordClient.once("clientReady", async () => {
     }
   }
 
+  console.log(`[Discord] Registering slash commands for ${discordClient.guilds.cache.size} guild(s).`);
   await registerSlashCommands([...discordClient.guilds.cache.keys()]);
+  console.log("[Discord] Slash command registration complete.");
   setInterval(() => {
     void checkScheduledRuns();
   }, schedulerIntervalMs);
@@ -321,6 +324,10 @@ discordClient.on("interactionCreate", async (interaction: Interaction) => {
     return;
   }
 
+  console.log(
+    `[Discord] Interaction received: /${interaction.commandName} in guild ${interaction.guildId ?? "dm"} from ${interaction.user.tag}`
+  );
+
   try {
     await handleSlashCommand(interaction);
   } catch (error) {
@@ -337,8 +344,29 @@ discordClient.on("voiceStateUpdate", async (oldState, newState) => {
 });
 
 export async function loginBot() {
+  console.log("[Discord] Starting bot login...");
   await discordClient.login(config.discordToken);
 }
+
+discordClient.on("error", (error) => {
+  console.error("[Discord] Client error:", error);
+});
+
+discordClient.on("warn", (message) => {
+  console.warn("[Discord] Warning:", message);
+});
+
+discordClient.on("shardError", (error) => {
+  console.error("[Discord] Shard error:", error);
+});
+
+discordClient.on("shardDisconnect", (event, shardId) => {
+  console.warn(`[Discord] Shard ${shardId} disconnected with code ${event.code}.`);
+});
+
+discordClient.on("shardResume", (shardId, replayedEvents) => {
+  console.log(`[Discord] Shard ${shardId} resumed. Replayed ${replayedEvents} events.`);
+});
 
 export async function startTrackingForGuild(guildId: string, title: string) {
   const activeRun = trackingRunRepository.findActiveByGuild(guildId);

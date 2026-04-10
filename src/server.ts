@@ -99,6 +99,26 @@ const filterRunsByGuild = (guildId: string) => trackingRunRepository.listByGuild
 const filterSessionsByGuild = (guildId: string) =>
   trackingSessionRepository.listAll().filter((session) => session.guild_id === guildId);
 
+const listKnownGuildMembers = async (guildId: string) => {
+  const guild =
+    discordClient.guilds.cache.get(guildId) ?? (await discordClient.guilds.fetch(guildId).catch(() => null));
+  if (!guild) {
+    return [] as Array<{ user_id: string; username: string }>;
+  }
+
+  const members = await guild.members.fetch().catch(() => null);
+  if (!members) {
+    return [] as Array<{ user_id: string; username: string }>;
+  }
+
+  return [...members.values()]
+    .filter((member) => !member.user.bot)
+    .map((member) => ({
+      user_id: member.id,
+      username: member.displayName ?? member.user.globalName ?? member.user.username
+    }));
+};
+
 const sanitizeWorksheetName = (name: string) =>
   name.replace(/[:\\/?*\[\]]/g, " ").trim().slice(0, 31) || "Voice Channel";
 
@@ -669,10 +689,10 @@ const buildRunDetailPageData = (guildId: string, runId: number) => {
   };
 };
 
-const buildUsersPageData = (guildId: string) => {
+const buildUsersPageData = async (guildId: string) => {
   const users = buildUserAnalytics(guildId);
   const sessionsForGuild = filterSessionsByGuild(guildId);
-  const seenUserIds = new Set(sessionsForGuild.map((session) => session.user_id));
+  const guildMembers = await listKnownGuildMembers(guildId);
 
   const registrationMap = new Map(
     registeredUserRepository
@@ -681,22 +701,22 @@ const buildUsersPageData = (guildId: string) => {
   );
   const trackedUsers = new Map<string, { user_id: string; username: string }>();
 
+  for (const member of guildMembers) {
+    trackedUsers.set(member.user_id, member);
+  }
+
   for (const session of sessionsForGuild) {
-    if (!trackedUsers.has(session.user_id)) {
-      trackedUsers.set(session.user_id, {
-        user_id: session.user_id,
-        username: session.username
-      });
-    }
+    trackedUsers.set(session.user_id, {
+      user_id: session.user_id,
+      username: trackedUsers.get(session.user_id)?.username ?? session.username
+    });
   }
 
   for (const registration of registrationMap.values()) {
-    if (!trackedUsers.has(registration.user_id)) {
-      trackedUsers.set(registration.user_id, {
-        user_id: registration.user_id,
-        username: registration.username
-      });
-    }
+    trackedUsers.set(registration.user_id, {
+      user_id: registration.user_id,
+      username: trackedUsers.get(registration.user_id)?.username ?? registration.username
+    });
   }
 
   const registrations = [...trackedUsers.values()]
@@ -793,10 +813,16 @@ app.get("/servers/:guildId/users", (req, res) => {
     return;
   }
 
-  res.render("users", buildUsersPageData(guildId));
+  buildUsersPageData(guildId)
+    .then((viewModel) => {
+      res.render("users", viewModel);
+    })
+    .catch((error) => {
+      res.status(500).send(error instanceof Error ? error.message : "Failed to load users dashboard.");
+    });
 });
 
-app.get("/api/dashboard-snapshot", (req, res) => {
+app.get("/api/dashboard-snapshot", async (req, res) => {
   const page = String(req.query.page ?? "");
   const guildId = String(req.query.guildId ?? "");
   const entityId = req.query.id ? Number(req.query.id) : null;
@@ -819,7 +845,8 @@ app.get("/api/dashboard-snapshot", (req, res) => {
   }
 
   if (page === "users" && guildId) {
-    return res.json({ snapshot: buildUsersPageData(guildId).liveSnapshot });
+    const viewModel = await buildUsersPageData(guildId);
+    return res.json({ snapshot: viewModel.liveSnapshot });
   }
 
   return res.status(400).json({ error: "Unknown dashboard page." });

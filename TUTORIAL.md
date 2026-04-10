@@ -213,7 +213,7 @@ This command is especially useful before cancelling a scheduled run or checking 
 If a member registered the wrong enrollment number or needs to be removed, an admin can use:
 
 ```text
-/tracking deregister member:<user>
+/deregister member:<user>
 ```
 
 This removes that member's saved enrollment number for the current server.
@@ -417,7 +417,7 @@ Coordinator schedules the workshop:
 /tracking schedule-start title:<name> start:<HH:mm>
 /tracking cancel runid:<id>
 /tracking status
-/tracking deregister member:<user>
+/deregister member:<user>
 /help
 /ping
 ```

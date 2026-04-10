@@ -40,6 +40,17 @@ const registerCommand = new SlashCommandBuilder()
       .setMaxLength(50)
   );
 
+const deregisterCommand = new SlashCommandBuilder()
+  .setName("deregister")
+  .setDescription("Remove a member's registered enrollment number from this server.")
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addUserOption((option) =>
+    option
+      .setName("member")
+      .setDescription("The member whose registration should be removed")
+      .setRequired(true)
+  );
+
 const enrollmentNumberPattern = /^[A-Z]{2}\d{2}[A-Z]{2}\d{7}$/;
 
 const trackingCommand = new SlashCommandBuilder()
@@ -110,20 +121,9 @@ const trackingCommand = new SlashCommandBuilder()
   )
   .addSubcommand((subcommand) =>
     subcommand.setName("status").setDescription("Show the active workshop and recent MUPC runs for this server.")
-  )
-  .addSubcommand((subcommand) =>
-    subcommand
-      .setName("deregister")
-      .setDescription("Remove a member's registered enrollment number from this server.")
-      .addUserOption((option) =>
-        option
-          .setName("member")
-          .setDescription("The member whose registration should be removed")
-          .setRequired(true)
-      )
   );
 
-const commands = [pingCommand, helpCommand, registerCommand, trackingCommand];
+const commands = [pingCommand, helpCommand, registerCommand, deregisterCommand, trackingCommand];
 
 const privateResponse = { flags: MessageFlags.Ephemeral as const };
 
@@ -221,7 +221,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Admin Commands",
                 value:
-                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/tracking deregister member:<user>`\nRemove a member's saved enrollment number.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
+                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/deregister member:<user>`\nRemove a member's saved enrollment number.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
               },
               {
                 name: "Recommended Workflow",
@@ -594,6 +594,15 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       return;
     }
 
+    if (interaction.commandName === "deregister") {
+      if (!(await ensureStaffAccess(interaction))) {
+        return;
+      }
+
+      await handleDeregister(interaction);
+      return;
+    }
+
     if (interaction.commandName !== "tracking") {
       return;
     }
@@ -625,11 +634,6 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
     if (subcommand === "cancel") {
       await handleCancel(interaction);
-      return;
-    }
-
-    if (subcommand === "deregister") {
-      await handleDeregister(interaction);
       return;
     }
 

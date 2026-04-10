@@ -21,7 +21,8 @@
             <h1>Workshop attendance history for this server.</h1>
             <p class="intro">
               Inspect registration data, participation history, average attendance depth, and the raw
-              voice records that power exports for this server only.
+              voice records that power exports, including members who have not registered yet, for this
+              server only.
             </p>
             <div class="hero-actions">
               <a href="<%= serverBasePath %>" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
@@ -33,7 +34,7 @@
           <aside class="hero-side">
             <div class="mini-card">
               <strong><%= registrations.length %></strong>
-              <span>Registered users in this server</span>
+              <span>Known members shown in this server</span>
             </div>
             <div class="mini-card">
               <strong><%= users.length %></strong>
@@ -53,13 +54,13 @@
             <div class="page-title-row">
               <div>
                 <p class="eyebrow">Registry</p>
-                <h2>Registered users</h2>
+                <h2>Member registry</h2>
               </div>
               <span class="muted-chip"><%= guildName %></span>
             </div>
 
             <% if (registrations.length === 0) { %>
-              <p class="empty-inline">No users with tracked attendance are registered yet for this server.</p>
+              <p class="empty-inline">No member or registration data is available for this server yet.</p>
             <% } else { %>
               <div class="table-wrap">
                 <table>
@@ -67,6 +68,7 @@
                     <tr>
                       <th>User</th>
                       <th>Enrollment No</th>
+                      <th>Status</th>
                       <th>Registered</th>
                       <th>Last updated</th>
                     </tr>
@@ -76,6 +78,7 @@
                       <tr>
                         <td><strong><%= user.username %></strong><br /><small><%= user.user_id %></small></td>
                         <td><%= user.enrollment_no %></td>
+                        <td><%= user.enrollment_no === "Not registered" ? "Unregistered" : "Registered" %></td>
                         <td><%= user.registered_display %></td>
                         <td><%= user.updated_display %></td>
                       </tr>
@@ -174,7 +177,8 @@
             <h2>Registration rule</h2>
             <p class="intro">
               Each Discord user can register exactly one enrollment number using <strong>/register</strong>.
-              This page only shows people who appear in attendance data for <strong><%= guildName %></strong>.
+              This page shows registered members, unregistered members available from Discord, and anyone
+              who appears in attendance data for <strong><%= guildName %></strong>.
             </p>
             <div class="stats-grid">
               <div class="stat-box">

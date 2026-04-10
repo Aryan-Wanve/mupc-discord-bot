@@ -516,7 +516,7 @@ const buildUserAnalytics = (guildId?: string) => {
   return rows;
 };
 
-const createWorkbookForRun = (runId: number) => {
+const createWorkbookForRun = async (runId: number) => {
   const run = trackingRunRepository.findById(runId);
   if (!run) {
     return null;
@@ -526,10 +526,14 @@ const createWorkbookForRun = (runId: number) => {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "MUPC Attendance Bot";
   workbook.created = new Date();
+  const guildMembers = new Map(
+    (await listKnownGuildMembers(run.guild_id)).map((member) => [member.user_id, member])
+  );
 
   const header = [
     "S.No",
-    "Username",
+    "Server Username",
+    "Discord Username",
     "User ID",
     "Enrollment No",
     "Total Duration (HH:MM:SS)",
@@ -544,9 +548,11 @@ const createWorkbookForRun = (runId: number) => {
     sheet.addRow(header);
 
     for (const row of channel.rows) {
+      const member = guildMembers?.get(row.userId);
       sheet.addRow([
         row.serial,
-        row.username,
+        member?.server_username ?? row.username,
+        member?.discord_username ?? row.username,
         row.userId,
         row.enrollmentNo,
         row.totalDuration,
@@ -557,19 +563,17 @@ const createWorkbookForRun = (runId: number) => {
       ]);
     }
 
-    sheet.columns = [
-      { width: 8 },
-      { width: 24 },
-      { width: 24 },
-      { width: 20 },
-      { width: 22 },
-      { width: 24 },
-      { width: 24 },
-      { width: 24 },
-      { width: 18 }
-    ];
     sheet.getRow(1).font = { bold: true };
     sheet.views = [{ state: "frozen", ySplit: 1 }];
+    sheet.getColumn(4).numFmt = "@";
+    sheet.eachRow((worksheetRow, rowNumber) => {
+      if (rowNumber === 1) {
+        return;
+      }
+
+      worksheetRow.getCell(4).value = String(worksheetRow.getCell(4).value ?? "");
+    });
+    autoFitWorksheetColumns(sheet);
   }
 
   if (summary.channels.length === 0) {
@@ -1007,7 +1011,7 @@ app.get("/servers/:guildId/runs/:id/export.xlsx", async (req, res) => {
     return;
   }
 
-  const result = createWorkbookForRun(Number(req.params.id));
+  const result = await createWorkbookForRun(Number(req.params.id));
   if (!result || result.run.guild_id !== guildId) {
     return res.status(404).send("Tracking run not found.");
   }

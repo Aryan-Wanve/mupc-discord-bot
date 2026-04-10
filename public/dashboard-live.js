@@ -1,10 +1,122 @@
 const LIVE_POLL_INTERVAL_MS = 8000;
+const THEME_STORAGE_KEY = "mupc-dashboard-theme";
 
 const body = document.body;
 const livePage = body.dataset.livePage;
 const liveSnapshot = body.dataset.liveSnapshot;
 const liveEntityId = body.dataset.liveEntityId;
 const liveGuildId = body.dataset.liveGuildId;
+
+const themePresets = {
+  blue: { primary: "#62e6ff", secondary: "#7c5cff" },
+  ember: { primary: "#ff9f43", secondary: "#ff3d71" },
+  mint: { primary: "#67f0aa", secondary: "#00c2a8" },
+  rose: { primary: "#ff7ab6", secondary: "#9b5cff" }
+};
+
+const hexToRgb = (hex) => {
+  const normalized = hex.replace("#", "");
+  const value = Number.parseInt(normalized, 16);
+
+  return `${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}`;
+};
+
+const applyTheme = ({ primary, secondary }) => {
+  document.documentElement.style.setProperty("--accent", primary);
+  document.documentElement.style.setProperty("--accent-strong", secondary);
+  document.documentElement.style.setProperty("--accent-rgb", hexToRgb(primary));
+  document.documentElement.style.setProperty("--accent-strong-rgb", hexToRgb(secondary));
+};
+
+const saveTheme = (theme) => {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(theme));
+  } catch {
+    // The picker still works for the current page if browser storage is blocked.
+  }
+};
+
+const getStoredTheme = () => {
+  try {
+    return JSON.parse(localStorage.getItem(THEME_STORAGE_KEY) || "null");
+  } catch {
+    return null;
+  }
+};
+
+const getMatchingPreset = (theme) =>
+  Object.entries(themePresets).find(
+    ([, preset]) => preset.primary === theme.primary && preset.secondary === theme.secondary
+  )?.[0] || null;
+
+const setupUtilityMenu = () => {
+  const menu = document.querySelector("[data-utility-menu]");
+  const toggle = document.querySelector("[data-utility-toggle]");
+  const primaryInput = document.querySelector("[data-theme-primary]");
+  const secondaryInput = document.querySelector("[data-theme-secondary]");
+  const swatches = [...document.querySelectorAll("[data-theme-preset]")];
+
+  if (!menu || !toggle || !primaryInput || !secondaryInput) {
+    return;
+  }
+
+  const setMenuOpen = (isOpen) => {
+    menu.classList.toggle("is-open", isOpen);
+    toggle.setAttribute("aria-expanded", String(isOpen));
+  };
+
+  const setSelectedSwatch = (presetName) => {
+    swatches.forEach((swatch) => {
+      swatch.classList.toggle("is-selected", swatch.dataset.themePreset === presetName);
+    });
+  };
+
+  const setTheme = (theme, { persist = true } = {}) => {
+    applyTheme(theme);
+    primaryInput.value = theme.primary;
+    secondaryInput.value = theme.secondary;
+    setSelectedSwatch(getMatchingPreset(theme));
+
+    if (persist) {
+      saveTheme(theme);
+    }
+  };
+
+  setTheme(getStoredTheme() || themePresets.blue, { persist: false });
+
+  toggle.addEventListener("click", () => {
+    setMenuOpen(!menu.classList.contains("is-open"));
+  });
+
+  swatches.forEach((swatch) => {
+    swatch.addEventListener("click", () => {
+      setTheme(themePresets[swatch.dataset.themePreset]);
+    });
+  });
+
+  [primaryInput, secondaryInput].forEach((input) => {
+    input.addEventListener("input", () => {
+      setTheme({
+        primary: primaryInput.value,
+        secondary: secondaryInput.value
+      });
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!menu.contains(event.target)) {
+      setMenuOpen(false);
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setMenuOpen(false);
+    }
+  });
+};
+
+setupUtilityMenu();
 
 if (livePage && liveSnapshot) {
   let currentSnapshot = liveSnapshot;

@@ -23,15 +23,18 @@ import { formatScheduleWindow, parseTodayTime, parseTodayTimeRange } from "./uti
 
 const pingCommand = new SlashCommandBuilder()
   .setName("ping")
-  .setDescription("Check whether the bot is responding.");
+  .setDescription("Check whether the bot is responding.")
+  .setDefaultMemberPermissions(null);
 
 const helpCommand = new SlashCommandBuilder()
   .setName("help")
-  .setDescription("Learn how to use the MUPC attendance bot and its commands.");
+  .setDescription("Learn how to use the MUPC attendance bot and its commands.")
+  .setDefaultMemberPermissions(null);
 
 const registerCommand = new SlashCommandBuilder()
   .setName("register")
   .setDescription("Register your enrollment number for MUPC workshop attendance exports.")
+  .setDefaultMemberPermissions(null)
   .addStringOption((option) =>
     option
       .setName("enrollmentno")

@@ -14,7 +14,11 @@ import {
 fs.mkdirSync(path.dirname(config.databasePath), { recursive: true });
 
 export const db = new Database(config.databasePath);
-db.pragma("journal_mode = WAL");
+
+// Railway volumes can behave poorly with WAL files on mounted storage.
+// This app runs as a single process, so a simpler journal mode is safer there.
+const isRailwayVolumePath = config.databasePath.includes(`${path.sep}app${path.sep}data${path.sep}`);
+db.pragma(`journal_mode = ${isRailwayVolumePath ? "DELETE" : "WAL"}`);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS tracking_runs (

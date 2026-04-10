@@ -84,11 +84,6 @@ body::after {
   animation: ambientShift 22s ease-in-out infinite alternate;
 }
 
-body.is-live-refreshing::after {
-  opacity: 0.9;
-  filter: blur(18px);
-}
-
 .floating-utility {
   position: fixed;
   right: 22px;
@@ -294,17 +289,21 @@ body.is-live-refreshing::after {
   animation: fadeUp 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.page[data-live-restored],
-.page[data-live-restored] .hero,
-.page[data-live-restored] .card,
-.page[data-live-restored] .empty-state,
-.page[data-live-restored] .subcard,
-.page[data-live-restored] .mini-card,
-.page[data-live-restored] .server-card,
-.page[data-live-restored] .run-card,
-.page[data-live-restored] .hero-actions .button-link,
-.page[data-live-restored] .actions .button-link,
-.page[data-live-restored] .list > * {
+[data-live-region] {
+  contain: style;
+}
+
+[data-live-region][data-live-restored],
+[data-live-region][data-live-restored] .hero,
+[data-live-region][data-live-restored] .card,
+[data-live-region][data-live-restored] .empty-state,
+[data-live-region][data-live-restored] .subcard,
+[data-live-region][data-live-restored] .mini-card,
+[data-live-region][data-live-restored] .server-card,
+[data-live-region][data-live-restored] .run-card,
+[data-live-region][data-live-restored] .hero-actions .button-link,
+[data-live-region][data-live-restored] .actions .button-link,
+[data-live-region][data-live-restored] .list > * {
   animation: none !important;
 }
 

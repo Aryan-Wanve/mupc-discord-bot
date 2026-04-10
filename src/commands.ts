@@ -40,6 +40,8 @@ const registerCommand = new SlashCommandBuilder()
       .setMaxLength(50)
   );
 
+const enrollmentNumberPattern = /^[A-Z]{2}\d{2}[A-Z]{2}\d{7}$/;
+
 const trackingCommand = new SlashCommandBuilder()
   .setName("tracking")
   .setDescription("Start, stop, or schedule MUPC workshop voice tracking.")
@@ -108,6 +110,17 @@ const trackingCommand = new SlashCommandBuilder()
   )
   .addSubcommand((subcommand) =>
     subcommand.setName("status").setDescription("Show the active workshop and recent MUPC runs for this server.")
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("deregister")
+      .setDescription("Remove a member's registered enrollment number from this server.")
+      .addUserOption((option) =>
+        option
+          .setName("member")
+          .setDescription("The member whose registration should be removed")
+          .setRequired(true)
+      )
   );
 
 const commands = [pingCommand, helpCommand, registerCommand, trackingCommand];
@@ -119,6 +132,8 @@ const isUnknownInteractionError = (error: unknown) =>
 
 const canManageTracking = (interaction: ChatInputCommandInteraction) =>
   interaction.inCachedGuild() && Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+
+const normalizeEnrollmentNo = (value: string) => value.trim().toUpperCase();
 
 const buildEmbed = (input: {
   title: string;
@@ -201,12 +216,12 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Member Command",
                 value:
-                  "`/register enrollmentno:<student enrollment number>`\nLinks a Discord user to an enrollment number for this server's exports."
+                  "`/register enrollmentno:<student enrollment number>`\nLinks a Discord user to an enrollment number for this server's exports. Format required: `AA00AA0000000`."
               },
               {
                 name: "Admin Commands",
                 value:
-                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
+                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/tracking deregister member:<user>`\nRemove a member's saved enrollment number.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
               },
               {
                 name: "Recommended Workflow",
@@ -224,7 +239,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Commands You Need",
                 value:
-                  "`/register enrollmentno:<your enrollment number>`\nRegister for this server so your attendance is matched correctly.\n\n`/help`\nShows this guide."
+                  "`/register enrollmentno:<your enrollment number>`\nRegister for this server so your attendance is matched correctly. Format required: `AA00AA0000000`.\n\n`/help`\nShows this guide."
               },
               {
                 name: "How Attendance Works",
@@ -436,9 +451,23 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
     throw new Error("This command must be used inside a server.");
   }
 
-  const enrollmentNo = interaction.options.getString("enrollmentno", true).trim();
+  const enrollmentNo = normalizeEnrollmentNo(interaction.options.getString("enrollmentno", true));
   const userId = interaction.user.id;
   const username = await getInteractionDisplayName(interaction);
+
+  if (!enrollmentNumberPattern.test(enrollmentNo)) {
+    await interaction.editReply({
+      embeds: [
+        buildEmbed({
+          title: "Invalid Enrollment Number",
+          description:
+            "Enrollment numbers must use the format **AA00AA0000000**. Example: **EN24CS3010238**.",
+          color: 0xff7a7a
+        })
+      ]
+    });
+    return;
+  }
 
   const existingForUser = registeredUserRepository.findByUserId(interaction.guildId, userId);
   if (existingForUser) {
@@ -483,6 +512,40 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
       buildEmbed({
         title: "Registration Complete",
         description: `Your enrollment number is now saved as **${registered?.enrollment_no ?? enrollmentNo}**.`,
+        color: 0x67f0aa
+      })
+    ]
+  });
+}
+
+async function handleDeregister(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId) {
+    throw new Error("This command must be used inside a server.");
+  }
+
+  const member = interaction.options.getUser("member", true);
+  const existing = registeredUserRepository.findByUserId(interaction.guildId, member.id);
+
+  if (!existing) {
+    await interaction.editReply({
+      embeds: [
+        buildEmbed({
+          title: "Registration Not Found",
+          description: "That member does not have a saved enrollment number in this server.",
+          color: 0xffb869
+        })
+      ]
+    });
+    return;
+  }
+
+  registeredUserRepository.deleteByUserId(interaction.guildId, member.id);
+
+  await interaction.editReply({
+    embeds: [
+      buildEmbed({
+        title: "Member Deregistered",
+        description: `Removed **${existing.enrollment_no}** for <@${member.id}> in this server.`,
         color: 0x67f0aa
       })
     ]
@@ -562,6 +625,11 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
     if (subcommand === "cancel") {
       await handleCancel(interaction);
+      return;
+    }
+
+    if (subcommand === "deregister") {
+      await handleDeregister(interaction);
       return;
     }
 

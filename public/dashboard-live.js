@@ -1,4 +1,4 @@
-const LIVE_POLL_INTERVAL_MS = 8000;
+const LIVE_POLL_INTERVAL_MS = 4000;
 const THEME_STORAGE_KEY = "mupc-dashboard-theme";
 
 const body = document.body;
@@ -197,7 +197,6 @@ if (livePage && liveSnapshot) {
     }
 
     isRefreshing = true;
-    body.classList.add("is-live-refreshing");
 
     try {
       const response = await fetch(window.location.pathname, {
@@ -208,28 +207,51 @@ if (livePage && liveSnapshot) {
       });
       const html = await response.text();
       const nextDocument = new DOMParser().parseFromString(html, "text/html");
-      const nextMain = nextDocument.querySelector("main.page");
-      const currentMain = document.querySelector("main.page");
       const nextBody = nextDocument.body;
+      const nextRegions = new Map(
+        [...nextDocument.querySelectorAll("[data-live-region]")]
+          .map((region) => [region.dataset.liveRegion, region])
+      );
+      const currentRegions = [...document.querySelectorAll("[data-live-region]")];
+      let updatedRegions = 0;
+      const getComparableRegionHtml = (region) => {
+        const clone = region.cloneNode(true);
+        clone.removeAttribute("data-live-restored");
+        return clone.outerHTML;
+      };
 
-      if (nextMain && currentMain && nextBody) {
-        nextMain.dataset.liveRestored = "true";
-        currentMain.replaceWith(nextMain);
+      if (nextBody && nextRegions.size > 0 && currentRegions.length > 0) {
+        currentRegions.forEach((currentRegion) => {
+          const nextRegion = nextRegions.get(currentRegion.dataset.liveRegion);
+
+          if (!nextRegion || getComparableRegionHtml(currentRegion) === getComparableRegionHtml(nextRegion)) {
+            return;
+          }
+
+          nextRegion.dataset.liveRestored = "true";
+          currentRegion.replaceWith(nextRegion);
+          window.setTimeout(() => {
+            nextRegion.removeAttribute("data-live-restored");
+          }, 1000);
+          updatedRegions += 1;
+        });
+
         setupDurationClocks();
         currentSnapshot = nextBody.dataset.liveSnapshot || currentSnapshot;
         body.dataset.liveSnapshot = currentSnapshot;
-        body.classList.add("has-live-update");
-        setToast("Dashboard updated", "updated");
 
-        window.setTimeout(() => {
-          body.classList.remove("has-live-update");
-        }, 1800);
+        if (updatedRegions > 0) {
+          body.classList.add("has-live-update");
+
+          window.setTimeout(() => {
+            body.classList.remove("has-live-update");
+          }, 800);
+        }
       }
     } catch (error) {
       console.error("Dashboard live refresh failed:", error);
       setToast("Auto-sync will retry", "error");
     } finally {
-      body.classList.remove("is-live-refreshing");
       isRefreshing = false;
     }
   };
@@ -264,4 +286,14 @@ if (livePage && liveSnapshot) {
   window.setInterval(() => {
     void checkForUpdates();
   }, LIVE_POLL_INTERVAL_MS);
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      void checkForUpdates();
+    }
+  });
+
+  window.addEventListener("focus", () => {
+    void checkForUpdates();
+  });
 }

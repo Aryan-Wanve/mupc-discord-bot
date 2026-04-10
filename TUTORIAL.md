@@ -60,10 +60,18 @@ Use this command:
 Example:
 
 ```text
-/register enrollmentno:23BCE1234
+/register enrollmentno:EN24CS3010238
 ```
 
 This links your Discord account to your enrollment number for that server.
+
+The enrollment number must follow this format:
+
+```text
+AA00AA0000000
+```
+
+If you type it in lowercase, the bot will automatically convert it to uppercase before saving it.
 
 You only need to do this once per server unless something changes.
 
@@ -199,6 +207,16 @@ This shows:
 - run IDs
 
 This command is especially useful before cancelling a scheduled run or checking whether tracking is already active.
+
+### Deregister a member
+
+If a member registered the wrong enrollment number or needs to be removed, an admin can use:
+
+```text
+/tracking deregister member:<user>
+```
+
+This removes that member's saved enrollment number for the current server.
 
 ### Open the help message
 
@@ -351,7 +369,7 @@ Here is a typical example of how the bot would be used for a real workshop.
 Students register:
 
 ```text
-/register enrollmentno:23BCE1234
+/register enrollmentno:EN24CS3010238
 ```
 
 Coordinator checks the bot:
@@ -399,6 +417,7 @@ Coordinator schedules the workshop:
 /tracking schedule-start title:<name> start:<HH:mm>
 /tracking cancel runid:<id>
 /tracking status
+/tracking deregister member:<user>
 /help
 /ping
 ```

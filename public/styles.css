@@ -259,10 +259,6 @@ body.is-live-refreshing::after {
   animation: pageRise 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-body.has-live-update .page {
-  animation: liveRefreshIn 480ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
 .hero,
 .card,
 .empty-state,
@@ -296,6 +292,20 @@ body.has-live-update .page {
   padding: 36px;
   margin-bottom: 24px;
   animation: fadeUp 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.page[data-live-restored],
+.page[data-live-restored] .hero,
+.page[data-live-restored] .card,
+.page[data-live-restored] .empty-state,
+.page[data-live-restored] .subcard,
+.page[data-live-restored] .mini-card,
+.page[data-live-restored] .server-card,
+.page[data-live-restored] .run-card,
+.page[data-live-restored] .hero-actions .button-link,
+.page[data-live-restored] .actions .button-link,
+.page[data-live-restored] .list > * {
+  animation: none !important;
 }
 
 .hero-copy {
@@ -1077,20 +1087,6 @@ small {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes liveRefreshIn {
-  from {
-    opacity: 0.72;
-    transform: translateY(8px);
-    filter: saturate(0.94);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: saturate(1);
   }
 }
 

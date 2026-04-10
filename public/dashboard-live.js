@@ -213,6 +213,7 @@ if (livePage && liveSnapshot) {
       const nextBody = nextDocument.body;
 
       if (nextMain && currentMain && nextBody) {
+        nextMain.dataset.liveRestored = "true";
         currentMain.replaceWith(nextMain);
         setupDurationClocks();
         currentSnapshot = nextBody.dataset.liveSnapshot || currentSnapshot;

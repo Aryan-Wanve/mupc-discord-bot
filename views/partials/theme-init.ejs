@@ -1,0 +1,39 @@
+<script>
+  (() => {
+    const themeStorageKey = "mupc-dashboard-theme";
+
+    const hexToRgb = (hex) => {
+      const normalized = hex.replace("#", "");
+      const value = Number.parseInt(normalized, 16);
+
+      if (Number.isNaN(value)) {
+        return null;
+      }
+
+      return `${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}`;
+    };
+
+    try {
+      const theme = JSON.parse(localStorage.getItem(themeStorageKey) || "null");
+
+      if (!theme?.primary || !theme?.secondary) {
+        return;
+      }
+
+      const primaryRgb = hexToRgb(theme.primary);
+      const secondaryRgb = hexToRgb(theme.secondary);
+
+      if (!primaryRgb || !secondaryRgb) {
+        return;
+      }
+
+      const root = document.documentElement;
+      root.style.setProperty("--accent", theme.primary);
+      root.style.setProperty("--accent-strong", theme.secondary);
+      root.style.setProperty("--accent-rgb", primaryRgb);
+      root.style.setProperty("--accent-strong-rgb", secondaryRgb);
+    } catch {
+      // Ignore blocked storage or invalid saved theme values.
+    }
+  })();
+</script>

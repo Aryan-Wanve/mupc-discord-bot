@@ -99,6 +99,17 @@ const filterRunsByGuild = (guildId: string) => trackingRunRepository.listByGuild
 const filterSessionsByGuild = (guildId: string) =>
   trackingSessionRepository.listAll().filter((session) => session.guild_id === guildId);
 
+const getRunAnalyticsEnd = (run: { is_active: number; ended_at: string | null }) =>
+  run.ended_at ?? (run.is_active ? new Date().toISOString() : null);
+
+const getRunDurationSeconds = (startedAt: string | null, endedAt: string | null) => {
+  if (!startedAt || !endedAt) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000));
+};
+
 const listKnownGuildMembers = async (guildId: string) => {
   const guild =
     discordClient.guilds.cache.get(guildId) ?? (await discordClient.guilds.fetch(guildId).catch(() => null));
@@ -379,6 +390,7 @@ const buildRunAnalytics = (runId: number, runStart: string | null, runEnd: strin
     latestLeavers,
     totalParticipants: participants.length,
     totalChannels: summary.channels.length,
+    totalRunSeconds: summary.totalRunSeconds,
     totalRunDuration: formatDuration(summary.totalRunSeconds)
   };
 };
@@ -652,7 +664,8 @@ const buildServerSelectionPageData = () => {
 
 const buildRunsPageData = (guildId: string) => {
   const runs = filterRunsByGuild(guildId).map((run) => {
-    const analytics = buildRunAnalytics(run.id, run.started_at, run.ended_at);
+    const analyticsEnd = getRunAnalyticsEnd(run);
+    const analytics = buildRunAnalytics(run.id, run.started_at, analyticsEnd);
 
     return {
       ...run,
@@ -663,6 +676,7 @@ const buildRunsPageData = (guildId: string) => {
       ended_display: formatDateTime(run.ended_at),
       total_channels: analytics.totalChannels,
       total_participants: analytics.totalParticipants,
+      total_run_duration_seconds: getRunDurationSeconds(run.started_at, analyticsEnd),
       total_run_duration: analytics.totalRunDuration
     };
   });
@@ -688,7 +702,8 @@ const buildRunDetailPageData = (guildId: string, runId: number) => {
     return null;
   }
 
-  const analytics = buildRunAnalytics(run.id, run.started_at, run.ended_at);
+  const analyticsEnd = getRunAnalyticsEnd(run);
+  const analytics = buildRunAnalytics(run.id, run.started_at, analyticsEnd);
 
   return {
     guildId,
@@ -709,7 +724,8 @@ const buildRunDetailPageData = (guildId: string, runId: number) => {
       scheduled_start_display: formatDateTime(run.scheduled_start),
       scheduled_end_display: formatDateTime(run.scheduled_end),
       started_display: formatDateTime(run.started_at),
-      ended_display: formatDateTime(run.ended_at)
+      ended_display: formatDateTime(run.ended_at),
+      total_run_duration_seconds: getRunDurationSeconds(run.started_at, analyticsEnd)
     },
     analytics
   };

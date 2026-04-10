@@ -41,7 +41,12 @@
               <span>Active workshop rooms</span>
             </div>
             <div class="mini-card">
-              <strong><%= analytics.totalRunDuration %></strong>
+              <strong
+                data-duration-clock
+                data-started-at="<%= run.started_at ?? "" %>"
+                data-ended-at="<%= run.ended_at ?? "" %>"
+                data-status="<%= run.status %>"
+              ><%= analytics.totalRunDuration %></strong>
               <span>Workshop duration</span>
             </div>
           </aside>

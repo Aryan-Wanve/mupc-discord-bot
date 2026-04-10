@@ -90,11 +90,17 @@
                         </div>
                         <div class="stat-box">
                           <div class="stat-label">Duration</div>
-                          <div class="stat-value"><%= run.total_run_duration %></div>
+                          <div
+                            class="stat-value"
+                            data-duration-clock
+                            data-started-at="<%= run.started_at ?? "" %>"
+                            data-ended-at="<%= run.ended_at ?? "" %>"
+                            data-status="<%= run.status %>"
+                          ><%= run.total_run_duration %></div>
                         </div>
                         <div class="stat-box">
-                          <div class="stat-label">Started</div>
-                          <div class="stat-value small-stat"><%= run.started_display %></div>
+                          <div class="stat-label"><%= run.status === "scheduled" ? "Scheduled" : "Started" %></div>
+                          <div class="stat-value small-stat"><%= run.status === "scheduled" ? run.scheduled_start_display : run.started_display %></div>
                         </div>
                       </div>
                     </div>

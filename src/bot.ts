@@ -173,7 +173,7 @@ function syncRunAcrossGuild(runId: number, guild: Guild) {
   updateBotBio();
 }
 
-async function activateRun(runId: number) {
+async function activateRun(runId: number, startedAt = nowIso()) {
   const run = trackingRunRepository.findById(runId);
   if (!run) {
     throw new Error("Tracking run not found.");
@@ -184,7 +184,7 @@ async function activateRun(runId: number) {
     throw new Error("A tracking run is already active for this server.");
   }
 
-  trackingRunRepository.markActive(run.id, nowIso());
+  trackingRunRepository.markActive(run.id, startedAt);
 
   const guild = await discordClient.guilds.fetch(run.guild_id).catch(() => null);
   if (guild) {
@@ -205,13 +205,13 @@ async function activateRun(runId: number) {
   }
 }
 
-async function completeRun(runId: number, status = "completed") {
+async function completeRun(runId: number, status = "completed", endedAt = nowIso()) {
   const run = trackingRunRepository.findById(runId);
   if (!run) {
     throw new Error("Tracking run not found.");
   }
 
-  trackingRunRepository.markCompleted(run.id, nowIso(), status);
+  trackingRunRepository.markCompleted(run.id, endedAt, status);
   tracker.stopTrackingForRun(run.id);
   updateBotBio();
 
@@ -234,7 +234,7 @@ async function checkScheduledRuns() {
 
   for (const run of trackingRunRepository.listDueToStart(current)) {
     try {
-      await activateRun(run.id);
+      await activateRun(run.id, run.scheduled_start ?? current);
     } catch (error) {
       trackingRunRepository.markCompleted(run.id, current, "failed");
       await sendGuildLog(
@@ -253,7 +253,7 @@ async function checkScheduledRuns() {
   }
 
   for (const run of trackingRunRepository.listDueToStop(current)) {
-    await completeRun(run.id);
+    await completeRun(run.id, "completed", run.scheduled_end ?? current);
   }
 }
 
@@ -306,6 +306,7 @@ discordClient.once("clientReady", async () => {
   console.log(`[Discord] Registering slash commands for ${discordClient.guilds.cache.size} guild(s).`);
   await registerSlashCommands([...discordClient.guilds.cache.keys()]);
   console.log("[Discord] Slash command registration complete.");
+  void checkScheduledRuns();
   setInterval(() => {
     void checkScheduledRuns();
   }, schedulerIntervalMs);

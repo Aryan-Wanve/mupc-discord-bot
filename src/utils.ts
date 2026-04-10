@@ -20,53 +20,74 @@ export const csvEscape = (value: string | number | null | undefined) => {
   return text;
 };
 
-export const parseTodayTimeRange = (startText: string, endText: string) => {
-  const timePattern = /^([01]?\d|2[0-3]):([0-5]\d)$/;
-  const startMatch = startText.match(timePattern);
-  const endMatch = endText.match(timePattern);
+const scheduleTimeZone = "Asia/Kolkata";
+const scheduleTimeZoneOffsetMinutes = 330;
+const oneDayMs = 24 * 60 * 60 * 1000;
 
-  if (!startMatch || !endMatch) {
+const parseTimeText = (timeText: string) => {
+  const timePattern = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+  const match = timeText.match(timePattern);
+
+  if (!match) {
     throw new Error("Times must use 24-hour HH:mm format, like 08:00 or 21:30.");
   }
 
-  const now = new Date();
-  const start = new Date(now);
-  start.setSeconds(0, 0);
-  start.setHours(Number(startMatch[1]), Number(startMatch[2]), 0, 0);
+  return {
+    hours: Number(match[1]),
+    minutes: Number(match[2])
+  };
+};
 
-  const end = new Date(now);
-  end.setSeconds(0, 0);
-  end.setHours(Number(endMatch[1]), Number(endMatch[2]), 0, 0);
+const getScheduleDateParts = (value = new Date()) => {
+  const localDate = new Date(value.getTime() + scheduleTimeZoneOffsetMinutes * 60 * 1000);
 
-  if (end <= start) {
-    end.setDate(end.getDate() + 1);
+  return {
+    year: localDate.getUTCFullYear(),
+    month: localDate.getUTCMonth(),
+    day: localDate.getUTCDate()
+  };
+};
+
+const createScheduleTimeMs = (hours: number, minutes: number) => {
+  const today = getScheduleDateParts();
+
+  return (
+    Date.UTC(today.year, today.month, today.day, hours, minutes, 0, 0) -
+    scheduleTimeZoneOffsetMinutes * 60 * 1000
+  );
+};
+
+export const parseTodayTimeRange = (startText: string, endText: string) => {
+  const start = parseTimeText(startText);
+  const end = parseTimeText(endText);
+  let startMs = createScheduleTimeMs(start.hours, start.minutes);
+  let endMs = createScheduleTimeMs(end.hours, end.minutes);
+
+  if (endMs <= startMs) {
+    endMs += oneDayMs;
+  }
+
+  if (endMs <= Date.now()) {
+    startMs += oneDayMs;
+    endMs += oneDayMs;
   }
 
   return {
-    startIso: start.toISOString(),
-    endIso: end.toISOString()
+    startIso: new Date(startMs).toISOString(),
+    endIso: new Date(endMs).toISOString()
   };
 };
 
 export const parseTodayTime = (startText: string) => {
-  const timePattern = /^([01]?\d|2[0-3]):([0-5]\d)$/;
-  const startMatch = startText.match(timePattern);
+  const start = parseTimeText(startText);
+  let startMs = createScheduleTimeMs(start.hours, start.minutes);
 
-  if (!startMatch) {
-    throw new Error("Times must use 24-hour HH:mm format, like 08:00 or 21:30.");
-  }
-
-  const now = new Date();
-  const start = new Date(now);
-  start.setSeconds(0, 0);
-  start.setHours(Number(startMatch[1]), Number(startMatch[2]), 0, 0);
-
-  if (start <= now) {
-    start.setDate(start.getDate() + 1);
+  if (startMs <= Date.now()) {
+    startMs += oneDayMs;
   }
 
   return {
-    startIso: start.toISOString()
+    startIso: new Date(startMs).toISOString()
   };
 };
 
@@ -76,6 +97,7 @@ export const formatDateTime = (value: string | null) => {
   }
 
   return new Date(value).toLocaleString("en-IN", {
+    timeZone: scheduleTimeZone,
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -93,12 +115,14 @@ export const formatScheduleWindow = (startValue: string | null, endValue: string
 
   const start = new Date(startValue);
   const dateFormatter = new Intl.DateTimeFormat("en-IN", {
+    timeZone: scheduleTimeZone,
     year: "numeric",
     month: "short",
     day: "2-digit"
   });
 
   const timeFormatter = new Intl.DateTimeFormat("en-IN", {
+    timeZone: scheduleTimeZone,
     hour: "2-digit",
     minute: "2-digit",
     hour12: true
@@ -109,7 +133,7 @@ export const formatScheduleWindow = (startValue: string | null, endValue: string
   }
 
   const end = new Date(endValue);
-  const sameDay = start.toDateString() === end.toDateString();
+  const sameDay = dateFormatter.format(start) === dateFormatter.format(end);
 
   if (sameDay) {
     return `${dateFormatter.format(start)}, ${timeFormatter.format(start)} to ${timeFormatter.format(end)}`;

@@ -116,7 +116,59 @@ const setupUtilityMenu = () => {
   });
 };
 
+const formatDuration = (seconds) => {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  return [hours, minutes, remainingSeconds].map((value) => String(value).padStart(2, "0")).join(":");
+};
+
+const setupDurationClocks = () => {
+  const clocks = [...document.querySelectorAll("[data-duration-clock]")];
+
+  if (setupDurationClocks.timer) {
+    window.clearInterval(setupDurationClocks.timer);
+  }
+
+  const updateClocks = () => {
+    const now = Date.now();
+    let hasActiveClock = false;
+
+    clocks.forEach((clock) => {
+      const startedAt = Date.parse(clock.dataset.startedAt || "");
+      const endedAt = Date.parse(clock.dataset.endedAt || "");
+
+      if (Number.isNaN(startedAt)) {
+        return;
+      }
+
+      const isEnded = !Number.isNaN(endedAt);
+      const isActive = clock.dataset.status === "active" && !isEnded;
+      const endTime = isEnded ? endedAt : now;
+
+      clock.textContent = formatDuration((endTime - startedAt) / 1000);
+      hasActiveClock = hasActiveClock || isActive;
+    });
+
+    if (!hasActiveClock && setupDurationClocks.timer) {
+      window.clearInterval(setupDurationClocks.timer);
+      setupDurationClocks.timer = null;
+    }
+  };
+
+  updateClocks();
+
+  if (clocks.some((clock) => clock.dataset.status === "active" && !clock.dataset.endedAt)) {
+    setupDurationClocks.timer = window.setInterval(updateClocks, 1000);
+  } else {
+    setupDurationClocks.timer = null;
+  }
+};
+
 setupUtilityMenu();
+setupDurationClocks();
 
 if (livePage && liveSnapshot) {
   let currentSnapshot = liveSnapshot;
@@ -162,6 +214,7 @@ if (livePage && liveSnapshot) {
 
       if (nextMain && currentMain && nextBody) {
         currentMain.replaceWith(nextMain);
+        setupDurationClocks();
         currentSnapshot = nextBody.dataset.liveSnapshot || currentSnapshot;
         body.dataset.liveSnapshot = currentSnapshot;
         body.classList.add("has-live-update");

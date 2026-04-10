@@ -54,8 +54,6 @@ const deregisterCommand = new SlashCommandBuilder()
       .setRequired(true)
   );
 
-const enrollmentNumberPattern = /^[A-Z]{2}\d{2}[A-Z]{2}\d{7}$/;
-
 const trackingCommand = new SlashCommandBuilder()
   .setName("tracking")
   .setDescription("Start, stop, or schedule MUPC workshop voice tracking.")
@@ -136,7 +134,7 @@ const isUnknownInteractionError = (error: unknown) =>
 const canManageTracking = (interaction: ChatInputCommandInteraction) =>
   interaction.inCachedGuild() && Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 
-const normalizeEnrollmentNo = (value: string) => value.trim().toUpperCase();
+const normalizeEnrollmentNo = (value: string) => value.trim();
 
 const buildEmbed = (input: {
   title: string;
@@ -219,7 +217,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Member Command",
                 value:
-                  "`/register enrollmentno:<student enrollment number>`\nLinks a Discord user to an enrollment number for this server's exports. Format required: `AA00AA0000000`."
+                  "`/register enrollmentno:<student enrollment number>`\nLinks a Discord user to an enrollment number for this server's exports."
               },
               {
                 name: "Admin Commands",
@@ -242,7 +240,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Commands You Need",
                 value:
-                  "`/register enrollmentno:<your enrollment number>`\nRegister for this server so your attendance is matched correctly. Format required: `AA00AA0000000`.\n\n`/help`\nShows this guide."
+                  "`/register enrollmentno:<your enrollment number>`\nRegister for this server so your attendance is matched correctly.\n\n`/help`\nShows this guide."
               },
               {
                 name: "How Attendance Works",
@@ -458,13 +456,12 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
   const userId = interaction.user.id;
   const username = await getInteractionDisplayName(interaction);
 
-  if (!enrollmentNumberPattern.test(enrollmentNo)) {
+  if (!enrollmentNo) {
     await interaction.editReply({
       embeds: [
         buildEmbed({
           title: "Invalid Enrollment Number",
-          description:
-            "Enrollment numbers must use the format **AA00AA0000000**. Example: **EN24CS3010238**.",
+          description: "Please enter a non-empty enrollment number.",
           color: 0xff7a7a
         })
       ]

@@ -60,18 +60,11 @@ Use this command:
 Example:
 
 ```text
-/register enrollmentno:EN24CS3010238
+/register enrollmentno:<your actual enrollment number>
 ```
 
 This links your Discord account to your enrollment number for that server.
-
-The enrollment number must follow this format:
-
-```text
-AA00AA0000000
-```
-
-If you type it in lowercase, the bot will automatically convert it to uppercase before saving it.
+Enter the enrollment number exactly the way your official record uses it. Different batches or systems may use different formats.
 
 You only need to do this once per server unless something changes.
 
@@ -369,7 +362,7 @@ Here is a typical example of how the bot would be used for a real workshop.
 Students register:
 
 ```text
-/register enrollmentno:EN24CS3010238
+/register enrollmentno:<your actual enrollment number>
 ```
 
 Coordinator checks the bot:

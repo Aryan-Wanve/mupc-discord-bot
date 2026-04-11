@@ -64,7 +64,7 @@ Example:
 ```
 
 This links your Discord account to your enrollment number for that server.
-Enter the enrollment number exactly the way your official record uses it. Different batches or systems may use different formats.
+The bot saves enrollment numbers in uppercase automatically, so `en24cs3010238` becomes `EN24CS3010238`.
 
 You only need to do this once per server unless something changes.
 

@@ -135,7 +135,7 @@ const isUnknownInteractionError = (error: unknown) =>
 const canManageTracking = (interaction: ChatInputCommandInteraction) =>
   interaction.inCachedGuild() && Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 
-const normalizeEnrollmentNo = (value: string) => value.trim();
+const normalizeEnrollmentNo = (value: string) => value.trim().toUpperCase();
 
 const buildEmbed = (input: {
   title: string;

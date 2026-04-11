@@ -16,6 +16,7 @@ import {
   getTrackingStatusForGuild,
   scheduleTrackingStartOnlyForGuild,
   scheduleTrackingForGuild,
+  sendRegistryLogForGuild,
   startTrackingForGuild,
   stopTrackingForGuild
 } from "./bot";
@@ -508,6 +509,16 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
     enrollmentNo
   });
 
+  await sendRegistryLogForGuild(interaction.guildId, {
+    title: "Member Registered",
+    description: "A server member saved or updated their enrollment number for attendance exports.",
+    color: 0x67f0aa,
+    fields: [
+      { name: "User", value: `${username}\n<@${userId}>`, inline: true },
+      { name: "Enrollment No", value: registered?.enrollment_no ?? enrollmentNo, inline: true }
+    ]
+  });
+
   await interaction.editReply({
     embeds: [
       buildEmbed({
@@ -541,6 +552,21 @@ async function handleDeregister(interaction: ChatInputCommandInteraction) {
   }
 
   registeredUserRepository.deleteByUserId(interaction.guildId, member.id);
+
+  await sendRegistryLogForGuild(interaction.guildId, {
+    title: "Member Deregistered",
+    description: "A saved enrollment number was removed from the server registry.",
+    color: 0xffb869,
+    fields: [
+      { name: "User", value: `${existing.username}\n<@${member.id}>`, inline: true },
+      { name: "Enrollment No", value: existing.enrollment_no, inline: true },
+      {
+        name: "Removed By",
+        value: `${await getInteractionDisplayName(interaction)}\n<@${interaction.user.id}>`,
+        inline: true
+      }
+    ]
+  });
 
   await interaction.editReply({
     embeds: [

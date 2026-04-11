@@ -23,6 +23,7 @@ import { formatScheduleWindow, nowIso } from "./utils";
 const tracker = new AttendanceTracker();
 const schedulerIntervalMs = 15_000;
 const logChannelName = "attendance-logs";
+const registryLogChannelName = "user-registry-logs";
 
 export const discordClient = new Client({
   intents: [
@@ -60,12 +61,22 @@ async function logGuildDiagnostics(guild: Guild) {
   const existingLogChannel = guild.channels.cache.find(
     (channel) => channel.type === ChannelType.GuildText && channel.name === logChannelName
   );
+  const existingRegistryLogChannel = guild.channels.cache.find(
+    (channel) => channel.type === ChannelType.GuildText && channel.name === registryLogChannelName
+  );
 
   const canViewExistingLog =
     existingLogChannel?.isTextBased() && existingLogChannel.viewable ? "yes" : "no";
   const canSendExistingLog =
     existingLogChannel?.isTextBased() &&
     existingLogChannel.permissionsFor(me)?.has(PermissionFlagsBits.SendMessages)
+      ? "yes"
+      : "no";
+  const canViewRegistryLog =
+    existingRegistryLogChannel?.isTextBased() && existingRegistryLogChannel.viewable ? "yes" : "no";
+  const canSendRegistryLog =
+    existingRegistryLogChannel?.isTextBased() &&
+    existingRegistryLogChannel.permissionsFor(me)?.has(PermissionFlagsBits.SendMessages)
       ? "yes"
       : "no";
 
@@ -79,7 +90,10 @@ async function logGuildDiagnostics(guild: Guild) {
       `voiceConnect=${permissions.has(PermissionFlagsBits.Connect)}`,
       `logChannel=${existingLogChannel ? existingLogChannel.name : "missing"}`,
       `logView=${canViewExistingLog}`,
-      `logSend=${canSendExistingLog}`
+      `logSend=${canSendExistingLog}`,
+      `registryLog=${existingRegistryLogChannel ? existingRegistryLogChannel.name : "missing"}`,
+      `registryView=${canViewRegistryLog}`,
+      `registrySend=${canSendRegistryLog}`
     ].join(" | ")
   );
 }
@@ -105,6 +119,60 @@ async function ensureLogChannel(guild: Guild) {
   } catch (error) {
     console.warn(
       `Could not create ${logChannelName} in guild ${guild.id}. ` +
+        `${error instanceof Error ? error.message : "Unknown error"}`
+    );
+    return null;
+  }
+}
+
+async function ensureRegistryLogChannel(guild: Guild) {
+  const existing = guild.channels.cache.find(
+    (channel) => channel.type === ChannelType.GuildText && channel.name === registryLogChannelName
+  );
+
+  if (existing?.isTextBased()) {
+    return existing as TextChannel;
+  }
+
+  try {
+    await guild.roles.fetch();
+    const privilegedRoles = guild.roles.cache
+      .filter(
+        (role) =>
+          role.id !== guild.roles.everyone.id &&
+          (role.permissions.has(PermissionFlagsBits.Administrator) ||
+            role.permissions.has(PermissionFlagsBits.ManageGuild) ||
+            role.permissions.has(PermissionFlagsBits.ManageChannels))
+      )
+      .map((role) => role.id);
+    const botMember = await guild.members.fetchMe();
+
+    return await guild.channels.create({
+      name: registryLogChannelName,
+      type: ChannelType.GuildText,
+      topic: "Private MUPC registry logs for enrollment registration activity.",
+      permissionOverwrites: [
+        {
+          id: guild.roles.everyone.id,
+          deny: [PermissionFlagsBits.ViewChannel]
+        },
+        {
+          id: botMember.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory
+          ]
+        },
+        ...privilegedRoles.map((roleId) => ({
+          id: roleId,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory]
+        }))
+      ]
+    });
+  } catch (error) {
+    console.warn(
+      `Could not create ${registryLogChannelName} in guild ${guild.id}. ` +
         `${error instanceof Error ? error.message : "Unknown error"}`
     );
     return null;
@@ -140,6 +208,26 @@ async function sendGuildLog(
   }
 
   const channel = await ensureLogChannel(guild).catch(() => null);
+  if (channel && channel.isTextBased()) {
+    await channel.send({ embeds: [buildLogEmbed(input)] }).catch(() => undefined);
+  }
+}
+
+export async function sendRegistryLogForGuild(
+  guildId: string,
+  input: {
+    title: string;
+    description?: string;
+    color?: number;
+    fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  }
+) {
+  const guild = await discordClient.guilds.fetch(guildId).catch(() => null);
+  if (!guild) {
+    return;
+  }
+
+  const channel = await ensureRegistryLogChannel(guild).catch(() => null);
   if (channel && channel.isTextBased()) {
     await channel.send({ embeds: [buildLogEmbed(input)] }).catch(() => undefined);
   }
@@ -294,6 +382,7 @@ discordClient.once("clientReady", async () => {
     await guild.channels.fetch();
     await logGuildDiagnostics(guild);
     await ensureLogChannel(guild);
+    await ensureRegistryLogChannel(guild);
   }
 
   for (const run of trackingRunRepository.list().filter((item) => item.is_active === 1)) {
@@ -317,6 +406,7 @@ discordClient.on("guildCreate", async (guild) => {
   await guild.channels.fetch();
   await logGuildDiagnostics(guild);
   await ensureLogChannel(guild);
+  await ensureRegistryLogChannel(guild);
   await registerSlashCommands([guild.id]);
 });
 

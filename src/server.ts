@@ -2,6 +2,7 @@
 import ExcelJS from "exceljs";
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import express, { NextFunction, Request, Response } from "express";
+import fs from "fs";
 import path from "path";
 import { discordClient } from "./bot";
 import { config } from "./config";
@@ -187,6 +188,13 @@ type ServerSummary = {
 
 const createSnapshot = (value: unknown) =>
   createHash("sha1").update(JSON.stringify(value)).digest("hex").slice(0, 12);
+const studentDataDirectory = path.join(process.cwd(), "stud_data");
+let studentNameLookupCache:
+  | {
+      fingerprint: string;
+      byEnrollment: Map<string, string>;
+    }
+  | null = null;
 
 const getGuildName = (guildId: string) => discordClient.guilds.cache.get(guildId)?.name ?? `Server ${guildId}`;
 const getGuildIconUrl = (guildId: string) =>
@@ -195,6 +203,84 @@ const getGuildIconUrl = (guildId: string) =>
 const filterRunsByGuild = (guildId: string) => trackingRunRepository.listByGuild(guildId);
 const filterSessionsByGuild = (guildId: string) =>
   trackingSessionRepository.listAll().filter((session) => session.guild_id === guildId);
+
+const normalizeHeaderKey = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+const getStudentDataFingerprint = (files: fs.Dirent[]) =>
+  files
+    .map((file) => {
+      const fullPath = path.join(studentDataDirectory, file.name);
+      const stats = fs.statSync(fullPath);
+      return `${file.name}:${stats.mtimeMs}:${stats.size}`;
+    })
+    .sort()
+    .join("|");
+
+const loadStudentNameLookup = async () => {
+  if (!fs.existsSync(studentDataDirectory)) {
+    return new Map<string, string>();
+  }
+
+  const files = fs
+    .readdirSync(studentDataDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".xlsx"));
+  const fingerprint = getStudentDataFingerprint(files);
+
+  if (studentNameLookupCache?.fingerprint === fingerprint) {
+    return studentNameLookupCache.byEnrollment;
+  }
+
+  const byEnrollment = new Map<string, string>();
+
+  for (const file of files) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(path.join(studentDataDirectory, file.name));
+
+    for (const worksheet of workbook.worksheets) {
+      const headerRow = worksheet.getRow(1);
+      const headerIndexByKey = new Map<string, number>();
+
+      headerRow.eachCell((cell, columnNumber) => {
+        headerIndexByKey.set(normalizeHeaderKey(cell.value), columnNumber);
+      });
+
+      const studentNameColumn = headerIndexByKey.get("studentname");
+      const enrollmentColumn = headerIndexByKey.get("enrollmentno");
+
+      if (!studentNameColumn || !enrollmentColumn) {
+        continue;
+      }
+
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) {
+          return;
+        }
+
+        const enrollmentNo = String(row.getCell(enrollmentColumn).value ?? "").trim().toUpperCase();
+        const studentName = String(row.getCell(studentNameColumn).value ?? "").trim();
+
+        if (enrollmentNo && studentName && !byEnrollment.has(enrollmentNo)) {
+          byEnrollment.set(enrollmentNo, studentName);
+        }
+      });
+    }
+  }
+
+  studentNameLookupCache = { fingerprint, byEnrollment };
+  return byEnrollment;
+};
+
+const getStudentNameForEnrollment = (enrollmentNo: string, studentNamesByEnrollment: Map<string, string>) => {
+  if (!enrollmentNo || enrollmentNo === "Not registered") {
+    return "do registration first";
+  }
+
+  return studentNamesByEnrollment.get(enrollmentNo.trim().toUpperCase()) ?? "data not availabe";
+};
 
 const getRunAnalyticsEnd = (run: { is_active: number; ended_at: string | null }) =>
   run.ended_at ?? (run.is_active ? new Date().toISOString() : null);
@@ -635,6 +721,7 @@ const createWorkbookForRun = async (runId: number) => {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "MUPC Attendance Bot";
   workbook.created = new Date();
+  const studentNamesByEnrollment = await loadStudentNameLookup();
   const guildMembers = new Map(
     (await listKnownGuildMembers(run.guild_id)).map((member) => [member.user_id, member])
   );
@@ -643,7 +730,7 @@ const createWorkbookForRun = async (runId: number) => {
     "S.No",
     "Server Username",
     "Discord Username",
-    "User ID",
+    "Student Name",
     "Enrollment No",
     "Total Duration (HH:MM:SS)",
     "Percentage of Total Duration",
@@ -662,7 +749,7 @@ const createWorkbookForRun = async (runId: number) => {
         row.serial,
         member?.server_username ?? row.username,
         member?.discord_username ?? row.username,
-        row.userId,
+        getStudentNameForEnrollment(row.enrollmentNo, studentNamesByEnrollment),
         row.enrollmentNo,
         row.totalDuration,
         row.percentage,
@@ -674,14 +761,6 @@ const createWorkbookForRun = async (runId: number) => {
 
     sheet.getRow(1).font = { bold: true };
     sheet.views = [{ state: "frozen", ySplit: 1 }];
-    sheet.getColumn(4).numFmt = "@";
-    sheet.eachRow((worksheetRow, rowNumber) => {
-      if (rowNumber === 1) {
-        return;
-      }
-
-      worksheetRow.getCell(4).value = String(worksheetRow.getCell(4).value ?? "");
-    });
     autoFitWorksheetColumns(sheet);
   }
 
@@ -924,7 +1003,6 @@ const buildUsersExportRows = async (guildId: string) => {
     return {
       serverUsername: member?.server_username ?? registration.username,
       discordUsername: member?.discord_username ?? registration.username,
-      userId: registration.user_id,
       enrollmentNo: registration.enrollment_no,
       status: registration.enrollment_no === "Not registered" ? "Unregistered" : "Registered",
       totalRunsJoined: analytics?.totalRunsJoined ?? 0,
@@ -941,6 +1019,7 @@ const createWorkbookForUsers = async (guildId: string) => {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "MUPC Attendance Bot";
   workbook.created = new Date();
+  const studentNamesByEnrollment = await loadStudentNameLookup();
 
   const guildName = getGuildName(guildId);
   const rows = await buildUsersExportRows(guildId);
@@ -949,7 +1028,7 @@ const createWorkbookForUsers = async (guildId: string) => {
   const header = [
     "Server Username",
     "Discord Username",
-    "User ID",
+    "Student Name",
     "Enrollment No",
     "Status",
     "Total Workshops Joined",
@@ -966,7 +1045,7 @@ const createWorkbookForUsers = async (guildId: string) => {
     sheet.addRow([
       row.serverUsername,
       row.discordUsername,
-      row.userId,
+      getStudentNameForEnrollment(row.enrollmentNo, studentNamesByEnrollment),
       row.enrollmentNo,
       row.status,
       row.totalRunsJoined,
@@ -980,16 +1059,6 @@ const createWorkbookForUsers = async (guildId: string) => {
 
   sheet.getRow(1).font = { bold: true };
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.getColumn(3).numFmt = "@";
-
-  sheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) {
-      return;
-    }
-
-    row.getCell(3).value = String(row.getCell(3).value ?? "");
-  });
-
   autoFitWorksheetColumns(sheet);
 
   return workbook;

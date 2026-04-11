@@ -276,11 +276,14 @@ const loadStudentNameLookup = async () => {
 
 const getStudentNameForEnrollment = (enrollmentNo: string, studentNamesByEnrollment: Map<string, string>) => {
   if (!enrollmentNo || enrollmentNo === "Not registered") {
-    return "do registration first";
+    return "-";
   }
 
   return studentNamesByEnrollment.get(enrollmentNo.trim().toUpperCase()) ?? "data not availabe";
 };
+
+const getExportEnrollmentNo = (enrollmentNo: string) =>
+  !enrollmentNo || enrollmentNo === "Not registered" ? "NA" : enrollmentNo;
 
 const getRunAnalyticsEnd = (run: { is_active: number; ended_at: string | null }) =>
   run.ended_at ?? (run.is_active ? new Date().toISOString() : null);
@@ -750,7 +753,7 @@ const createWorkbookForRun = async (runId: number) => {
         member?.server_username ?? row.username,
         member?.discord_username ?? row.username,
         getStudentNameForEnrollment(row.enrollmentNo, studentNamesByEnrollment),
-        row.enrollmentNo,
+        getExportEnrollmentNo(row.enrollmentNo),
         row.totalDuration,
         row.percentage,
         row.firstJoin,
@@ -1046,7 +1049,7 @@ const createWorkbookForUsers = async (guildId: string) => {
       row.serverUsername,
       row.discordUsername,
       getStudentNameForEnrollment(row.enrollmentNo, studentNamesByEnrollment),
-      row.enrollmentNo,
+      getExportEnrollmentNo(row.enrollmentNo),
       row.status,
       row.totalRunsJoined,
       row.averagePercentage,

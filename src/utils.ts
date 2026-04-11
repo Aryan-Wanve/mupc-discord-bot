@@ -20,7 +20,7 @@ export const csvEscape = (value: string | number | null | undefined) => {
   return text;
 };
 
-const scheduleTimeZone = "Asia/Kolkata";
+export const IST_TIME_ZONE = "Asia/Kolkata";
 const scheduleTimeZoneOffsetMinutes = 330;
 const oneDayMs = 24 * 60 * 60 * 1000;
 
@@ -97,7 +97,7 @@ export const formatDateTime = (value: string | null) => {
   }
 
   return new Date(value).toLocaleString("en-IN", {
-    timeZone: scheduleTimeZone,
+    timeZone: IST_TIME_ZONE,
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -115,14 +115,14 @@ export const formatScheduleWindow = (startValue: string | null, endValue: string
 
   const start = new Date(startValue);
   const dateFormatter = new Intl.DateTimeFormat("en-IN", {
-    timeZone: scheduleTimeZone,
+    timeZone: IST_TIME_ZONE,
     year: "numeric",
     month: "short",
     day: "2-digit"
   });
 
   const timeFormatter = new Intl.DateTimeFormat("en-IN", {
-    timeZone: scheduleTimeZone,
+    timeZone: IST_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
     hour12: true

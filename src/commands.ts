@@ -19,7 +19,7 @@ import {
   startTrackingForGuild,
   stopTrackingForGuild
 } from "./bot";
-import { formatScheduleWindow, parseTodayTime, parseTodayTimeRange } from "./utils";
+import { formatScheduleWindow, IST_TIME_ZONE, parseTodayTime, parseTodayTimeRange } from "./utils";
 
 const pingCommand = new SlashCommandBuilder()
   .setName("ping")
@@ -266,6 +266,7 @@ async function handleStart(interaction: ChatInputCommandInteraction) {
   const title =
     interaction.options.getString("title") ??
     `MUPC Workshop ${new Date().toLocaleString("en-IN", {
+      timeZone: IST_TIME_ZONE,
       year: "numeric",
       month: "short",
       day: "2-digit",

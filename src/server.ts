@@ -1,6 +1,6 @@
 // Easter egg: these dashboards were framed with a little Oneway energy for future explorers.
 import ExcelJS from "exceljs";
-import { createHash } from "crypto";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
 import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import { discordClient } from "./bot";
@@ -9,28 +9,125 @@ import { registeredUserRepository, trackingRunRepository, trackingSessionReposit
 import { formatDateTime, formatDuration, formatPercentage } from "./utils";
 
 const app = express();
+const dashboardSessionCookieName = "mupc_dashboard_session";
 
 app.set("view engine", "ejs");
 app.set("views", path.join(process.cwd(), "views"));
+app.set("trust proxy", 1);
 app.use(express.urlencoded({ extended: true }));
 app.use("/assets", express.static(path.join(process.cwd(), "public")));
 
-const requireBasicAuth = (req: Request, res: Response, next: NextFunction) => {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Basic ")) {
-    res.setHeader("WWW-Authenticate", "Basic realm=\"Attendance Dashboard\"");
-    return res.status(401).send("Authentication required.");
+const createAuthSignature = (payload: string) =>
+  createHmac("sha256", config.sessionSecret).update(payload).digest("hex");
+
+const createAuthToken = () => {
+  const payload = Buffer.from(`${config.dashboardUsername}:${Date.now()}`).toString("base64url");
+  const signature = createAuthSignature(payload);
+  return `${payload}.${signature}`;
+};
+
+const parseCookies = (cookieHeader?: string) => {
+  if (!cookieHeader) {
+    return new Map<string, string>();
   }
 
-  const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
-  const [username, password] = decoded.split(":");
+  return new Map(
+    cookieHeader
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separatorIndex = part.indexOf("=");
+        if (separatorIndex === -1) {
+          return [part, ""];
+        }
 
-  if (username !== config.dashboardUsername || password !== config.dashboardPassword) {
-    res.setHeader("WWW-Authenticate", "Basic realm=\"Attendance Dashboard\"");
-    return res.status(401).send("Invalid credentials.");
+        return [part.slice(0, separatorIndex), decodeURIComponent(part.slice(separatorIndex + 1))];
+      })
+  );
+};
+
+const isAuthenticatedRequest = (req: Request) => {
+  const token = parseCookies(req.headers.cookie).get(dashboardSessionCookieName);
+  if (!token) {
+    return false;
   }
 
-  next();
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature) {
+    return false;
+  }
+
+  const expectedSignature = createAuthSignature(payload);
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+
+  if (signatureBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  if (!timingSafeEqual(signatureBuffer, expectedBuffer)) {
+    return false;
+  }
+
+  const decodedPayload = Buffer.from(payload, "base64url").toString("utf8");
+  const [username] = decodedPayload.split(":");
+  return username === config.dashboardUsername;
+};
+
+const setDashboardSessionCookie = (req: Request, res: Response) => {
+  const secure =
+    req.secure ||
+    String(req.headers["x-forwarded-proto"] ?? "")
+      .split(",")[0]
+      .trim() === "https";
+  const parts = [
+    `${dashboardSessionCookieName}=${encodeURIComponent(createAuthToken())}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    secure ? "Secure" : ""
+  ].filter(Boolean);
+
+  res.setHeader("Set-Cookie", parts.join("; "));
+};
+
+const clearDashboardSessionCookie = (req: Request, res: Response) => {
+  const secure =
+    req.secure ||
+    String(req.headers["x-forwarded-proto"] ?? "")
+      .split(",")[0]
+      .trim() === "https";
+  const parts = [
+    `${dashboardSessionCookieName}=`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    "Max-Age=0",
+    secure ? "Secure" : ""
+  ].filter(Boolean);
+
+  res.setHeader("Set-Cookie", parts.join("; "));
+};
+
+const buildLoginPageData = (req: Request, errorMessage?: string) => ({
+  title: "Dashboard Login",
+  loginAction: `/login?next=${encodeURIComponent(
+    typeof req.query.next === "string" && req.query.next.startsWith("/")
+      ? req.query.next
+      : "/"
+  )}`,
+  errorMessage
+});
+
+const requireDashboardAuth = (req: Request, res: Response, next: NextFunction) => {
+  if (isAuthenticatedRequest(req)) {
+    next();
+    return;
+  }
+
+  const redirectTo = req.originalUrl && req.originalUrl !== "/login" ? req.originalUrl : "/";
+  res.redirect(`/login?next=${encodeURIComponent(redirectTo)}`);
 };
 
 type ExportRow = {
@@ -791,6 +888,8 @@ const buildUsersPageData = async (guildId: string) => {
     joined_display: formatDateTime(session.joined_at),
     left_display: formatDateTime(session.left_at)
   }));
+  const joinedUserIds = new Set(sessionsForGuild.map((session) => session.user_id));
+  const registeredJoinedUserCount = [...joinedUserIds].filter((userId) => registrationMap.has(userId)).length;
 
   return {
     guildId,
@@ -799,6 +898,8 @@ const buildUsersPageData = async (guildId: string) => {
     users,
     sessions,
     registrations,
+    totalJoinedUsers: joinedUserIds.size,
+    totalRegisteredJoinedUsers: registeredJoinedUserCount,
     currentPage: "users",
     livePage: "users",
     liveSnapshot: createSnapshot({
@@ -913,7 +1014,36 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ ok: true });
 });
 
-app.use(requireBasicAuth);
+app.get("/login", (req, res) => {
+  if (isAuthenticatedRequest(req)) {
+    const next = typeof req.query.next === "string" && req.query.next.startsWith("/") ? req.query.next : "/";
+    res.redirect(next);
+    return;
+  }
+
+  res.status(200).render("login", buildLoginPageData(req));
+});
+
+app.post("/login", (req, res) => {
+  const username = String(req.body.username ?? "").trim();
+  const password = String(req.body.password ?? "");
+  const next = typeof req.query.next === "string" && req.query.next.startsWith("/") ? req.query.next : "/";
+
+  if (username !== config.dashboardUsername || password !== config.dashboardPassword) {
+    res.status(401).render("login", buildLoginPageData(req, "Wrong username or password. Try again."));
+    return;
+  }
+
+  setDashboardSessionCookie(req, res);
+  res.redirect(next);
+});
+
+app.post("/logout", (req, res) => {
+  clearDashboardSessionCookie(req, res);
+  res.redirect("/login");
+});
+
+app.use(requireDashboardAuth);
 
 app.get("/", (req, res) => {
   res.render("servers", buildServerSelectionPageData());

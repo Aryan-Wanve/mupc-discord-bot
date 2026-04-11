@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %></title>
+    <%- include("partials/theme-init") %>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body class="login-page">
+    <main class="login-shell">
+      <section class="login-hero">
+        <div class="login-copy">
+          <p class="eyebrow">MUPC Dashboard</p>
+          <h1>Sign in to the control room.</h1>
+          <p class="intro">
+            Track workshops, registry events, attendance runs, and server-level analytics from one
+            private live dashboard.
+          </p>
+          <div class="login-pills">
+            <span class="muted-chip">Live attendance</span>
+            <span class="muted-chip">Registry logs</span>
+            <span class="muted-chip">IST scheduling</span>
+          </div>
+        </div>
+
+        <div class="login-visual" aria-hidden="true">
+          <div class="login-orbit login-orbit-one"></div>
+          <div class="login-orbit login-orbit-two"></div>
+          <div class="login-grid-glow"></div>
+          <div class="login-core">
+            <span>MUPC</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="login-card">
+        <div class="login-card-head">
+          <p class="eyebrow">Private Access</p>
+          <h2>Welcome back</h2>
+          <p class="notes">Use your dashboard credentials to open the live server workspace.</p>
+        </div>
+
+        <% if (errorMessage) { %>
+          <div class="login-alert" role="alert"><%= errorMessage %></div>
+        <% } %>
+
+        <form method="post" action="<%= loginAction %>" class="login-form" autocomplete="on">
+          <label class="login-field">
+            <span>Username</span>
+            <input
+              type="text"
+              name="username"
+              autocomplete="username"
+              spellcheck="false"
+              required
+              autofocus
+              placeholder="Dashboard username"
+            />
+          </label>
+
+          <label class="login-field">
+            <span>Password</span>
+            <input
+              type="password"
+              name="password"
+              autocomplete="current-password"
+              required
+              placeholder="Dashboard password"
+            />
+          </label>
+
+          <button type="submit" class="button-link login-submit">Open Dashboard</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

@@ -378,7 +378,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Recommended Workflow",
                 value:
-                  "1. Ask members to use `/register` in the same server.\n2. Review `/show mismatched` and use `/deregister mismatched` if student-data cleanup is needed.\n3. Optionally use `/rename registered` to align eligible nicknames with student data.\n4. Use `/tracking start` for immediate sessions, `/tracking schedule` for fixed windows, or `/tracking schedule-start` when the ending time is not fixed.\n5. Use `/tracking status` to confirm the run ID and state.\n6. Use `/tracking stop` when the workshop ends, or `/tracking cancel` if a scheduled run should not happen.\n7. Review the server-specific dashboard and exports."
+                  "1. Ask members to use `/register` in the same server.\n2. Review `/show mismatched` if enrollment cleanup is needed.\n3. Review `/show registered-role` if some registered users are missing the `registered` role.\n4. Use `/deregister mismatched` to remove bad registrations when needed.\n5. Use `/rename registered` for normal eligible nickname sync, and `/rename update` to clean old all-caps or messy formatting.\n6. Use `/tracking start` for immediate sessions, `/tracking schedule` for fixed windows, or `/tracking schedule-start` when the ending time is not fixed.\n7. Use `/tracking status` to confirm the run ID and state.\n8. Use `/tracking stop` when the workshop ends, or `/tracking cancel` if a scheduled run should not happen.\n9. Review the server-specific dashboard and exports."
                 }
               ]
             })

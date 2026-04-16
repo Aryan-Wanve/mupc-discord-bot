@@ -68,6 +68,16 @@ const deregisterCommand = new SlashCommandBuilder()
       .setDescription("Remove every registered enrollment number that does not match student data.")
   );
 
+const renameCommand = new SlashCommandBuilder()
+  .setName("rename")
+  .setDescription("Rename registered members using student data.")
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("registered")
+      .setDescription("Rename eligible registered members to their student names.")
+  );
+
 const showCommand = new SlashCommandBuilder()
   .setName("show")
   .setDescription("Show admin views related to registrations and tracking.")
@@ -148,7 +158,15 @@ const trackingCommand = new SlashCommandBuilder()
     subcommand.setName("status").setDescription("Show the active workshop and recent MUPC runs for this server.")
   );
 
-const commands = [pingCommand, helpCommand, registerCommand, deregisterCommand, showCommand, trackingCommand];
+const commands = [
+  pingCommand,
+  helpCommand,
+  registerCommand,
+  deregisterCommand,
+  renameCommand,
+  showCommand,
+  trackingCommand
+];
 
 const privateResponse = { flags: MessageFlags.Ephemeral as const };
 
@@ -260,6 +278,18 @@ const getGuildMemberMap = async (interaction: ChatInputCommandInteraction) => {
   return new Map((members ? [...members.values()] : []).map((member) => [member.id, member]));
 };
 
+const memberRoleName = "member";
+
+const getNonEveryoneRoleNames = (member: GuildMember) =>
+  member.roles.cache
+    .filter((role) => role.id !== member.guild.roles.everyone.id)
+    .map((role) => role.name.toLowerCase());
+
+const isEligibleForRegisteredRename = (member: GuildMember) => {
+  const roleNames = getNonEveryoneRoleNames(member);
+  return roleNames.length === 0 || (roleNames.length === 1 && roleNames[0] === memberRoleName);
+};
+
 const sendMismatchDm = async (
   member: GuildMember | null,
   enrollmentNo: string
@@ -296,7 +326,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Admin Commands",
                 value:
-                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/show mismatched`\nList members whose enrollment numbers do not match student data.\n\n`/deregister member user:<user>`\nRemove one member's saved enrollment number.\n\n`/deregister mismatched`\nBulk-remove mismatched registrations and DM those members.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
+                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/show mismatched`\nList members whose enrollment numbers do not match student data.\n\n`/deregister member user:<user>`\nRemove one member's saved enrollment number.\n\n`/deregister mismatched`\nBulk-remove mismatched registrations and DM those members.\n\n`/rename registered`\nRename eligible registered members to their student names.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
               },
               {
                 name: "Recommended Workflow",
@@ -792,6 +822,110 @@ async function handleShowMismatched(interaction: ChatInputCommandInteraction) {
   });
 }
 
+async function handleRenameRegistered(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId || !interaction.inCachedGuild()) {
+    throw new Error("This command must be used inside a server.");
+  }
+
+  const studentNamesByEnrollment = await loadStudentNameLookup();
+  const registrations = registeredUserRepository.listByGuild(interaction.guildId);
+  const memberMap = await getGuildMemberMap(interaction);
+
+  let renamedCount = 0;
+  let skippedRoleCount = 0;
+  let skippedMissingNameCount = 0;
+  let skippedUnmanageableCount = 0;
+  let failedRenameCount = 0;
+  let unchangedCount = 0;
+  const examples: string[] = [];
+
+  for (const registration of registrations) {
+    const member = memberMap.get(registration.user_id);
+    if (!member) {
+      continue;
+    }
+
+    if (!isEligibleForRegisteredRename(member)) {
+      skippedRoleCount += 1;
+      continue;
+    }
+
+    const targetName = getStudentNameForEnrollment(registration.enrollment_no, studentNamesByEnrollment);
+    if (targetName === "-" || targetName === "Data not available") {
+      skippedMissingNameCount += 1;
+      continue;
+    }
+
+    if (!member.manageable) {
+      skippedUnmanageableCount += 1;
+      continue;
+    }
+
+    const currentName = member.nickname ?? member.user.globalName ?? member.user.username;
+    if (currentName === targetName) {
+      unchangedCount += 1;
+      continue;
+    }
+
+    const renamed = await member
+      .setNickname(targetName, "Renamed from registered enrollment number")
+      .then(() => true)
+      .catch(() => false);
+    if (!renamed) {
+      failedRenameCount += 1;
+      continue;
+    }
+
+    renamedCount += 1;
+
+    if (examples.length < 5) {
+      examples.push(`${currentName} -> ${targetName} (${registration.enrollment_no})`);
+    }
+  }
+
+  await sendRegistryLogForGuild(interaction.guildId, {
+    title: "Registered Members Renamed",
+    description: "Eligible registered members were renamed using student names mapped from enrollment numbers.",
+    color: 0x67f0aa,
+    fields: [
+      { name: "Renamed", value: String(renamedCount), inline: true },
+      { name: "Skipped Roles", value: String(skippedRoleCount), inline: true },
+      { name: "Missing Student Name", value: String(skippedMissingNameCount), inline: true },
+      { name: "Not Manageable", value: String(skippedUnmanageableCount), inline: true },
+      { name: "Rename Failed", value: String(failedRenameCount), inline: true },
+      { name: "Already Matching", value: String(unchangedCount), inline: true },
+      {
+        name: "Renamed By",
+        value: `${await getInteractionDisplayName(interaction)}\n<@${interaction.user.id}>`,
+        inline: true
+      },
+      {
+        name: "Examples",
+        value: examples.length > 0 ? examples.join("\n") : "No nickname changes were needed."
+      }
+    ]
+  });
+
+  await interaction.editReply({
+    embeds: [
+      buildEmbed({
+        title: renamedCount > 0 ? "Registered Members Renamed" : "No Members Renamed",
+        description:
+          "Only members with no extra roles or only the `member` role were considered for renaming.",
+        color: renamedCount > 0 ? 0x67f0aa : 0xffd85a,
+        fields: [
+          { name: "Renamed", value: String(renamedCount), inline: true },
+          { name: "Skipped Roles", value: String(skippedRoleCount), inline: true },
+          { name: "Missing Student Name", value: String(skippedMissingNameCount), inline: true },
+          { name: "Not Manageable", value: String(skippedUnmanageableCount), inline: true },
+          { name: "Rename Failed", value: String(failedRenameCount), inline: true },
+          { name: "Already Matching", value: String(unchangedCount), inline: true }
+        ]
+      })
+    ]
+  });
+}
+
 export async function registerSlashCommands(guildIds: string[]) {
   if (guildIds.length === 0) {
     return;
@@ -847,6 +981,20 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       }
 
       await handleDeregisterMember(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "rename") {
+      if (!(await ensureStaffAccess(interaction))) {
+        return;
+      }
+
+      const subcommand = interaction.options.getSubcommand(true);
+      if (subcommand !== "registered") {
+        return;
+      }
+
+      await handleRenameRegistered(interaction);
       return;
     }
 

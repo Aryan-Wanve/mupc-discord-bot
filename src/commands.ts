@@ -304,6 +304,23 @@ const isEligibleForRegisteredRename = (member: GuildMember) => {
   return roleNames.length === 0 || (roleNames.length === 1 && roleNames[0] === memberRoleName);
 };
 
+const normalizeNicknameValue = (value: string) => value.trim().replace(/\s+/g, " ");
+
+const needsRegisteredNameRefresh = (currentName: string, targetName: string) => {
+  const normalizedCurrent = normalizeNicknameValue(currentName);
+  const normalizedTarget = normalizeNicknameValue(targetName);
+
+  if (currentName !== normalizedCurrent || targetName !== normalizedTarget) {
+    return true;
+  }
+
+  if (normalizedCurrent !== normalizedTarget) {
+    return true;
+  }
+
+  return formatStudentDisplayName(normalizedCurrent) !== normalizedTarget;
+};
+
 const sendMismatchDm = async (
   member: GuildMember | null,
   enrollmentNo: string
@@ -1060,7 +1077,7 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
     }
 
     const currentName = member.nickname ?? member.user.globalName ?? member.user.username;
-    if (currentName === targetName) {
+    if (!needsRegisteredNameRefresh(currentName, targetName)) {
       unchangedCount += 1;
       continue;
     }

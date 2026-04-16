@@ -65,6 +65,7 @@ Example:
 
 This links your Discord account to your enrollment number for that server.
 The bot saves enrollment numbers in uppercase automatically, so `en24cs3010238` becomes `EN24CS3010238`.
+Use the same enrollment number format that appears in the student data sheets. Example: `EN24CS3010238`.
 
 You only need to do this once per server unless something changes.
 
@@ -201,15 +202,40 @@ This shows:
 
 This command is especially useful before cancelling a scheduled run or checking whether tracking is already active.
 
+### Show mismatched registrations
+
+If you want to review members whose saved enrollment numbers do not match the current student data, use:
+
+```text
+/show mismatched
+```
+
+This shows an admin-only embed with the members who need to fix their registration.
+It posts the list in Discord as embeds so the core/head can review it quickly.
+
 ### Deregister a member
 
 If a member registered the wrong enrollment number or needs to be removed, an admin can use:
 
 ```text
-/deregister member:<user>
+/deregister member user:<user>
 ```
 
 This removes that member's saved enrollment number for the current server.
+
+### Deregister all mismatched registrations
+
+If you want to bulk-remove only the registrations that do not match the student data, use:
+
+```text
+/deregister mismatched
+```
+
+This does three things:
+
+1. removes those mismatched registrations from the current server
+2. sends each affected member a direct message explaining why
+3. tells them to register again using the correct format
 
 ### Open the help message
 
@@ -243,6 +269,7 @@ This is the easiest way to use the bot during a real session.
 2. Open the dashboard
 3. Review the attendance
 4. Export the final file
+5. If needed, use the mismatched export to clean incorrect registrations
 
 ## Part 3: Using the dashboard
 
@@ -257,6 +284,20 @@ http://localhost:3000
 ```
 
 If the project is hosted online, open the deployed URL instead.
+
+### Users DB page
+
+The Users DB page now shows:
+
+- registered members
+- unmatched registrations
+- raw session rows
+- user attendance summaries
+
+It also has two export buttons:
+
+- `Download Users Excel`
+- `Download Mismatched Data`
 
 For example:
 

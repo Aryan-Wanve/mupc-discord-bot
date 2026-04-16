@@ -3,6 +3,7 @@ import {
   ChatInputCommandInteraction,
   DiscordAPIError,
   EmbedBuilder,
+  GuildMember,
   MessageFlags,
   PermissionFlagsBits,
   REST,
@@ -16,10 +17,12 @@ import {
   getTrackingStatusForGuild,
   scheduleTrackingStartOnlyForGuild,
   scheduleTrackingForGuild,
+  sendDirectMessage,
   sendRegistryLogForGuild,
   startTrackingForGuild,
   stopTrackingForGuild
 } from "./bot";
+import { getStudentNameForEnrollment, isEnrollmentMatched, loadStudentNameLookup, normalizeEnrollmentNo } from "./studentData";
 import { formatScheduleWindow, IST_TIME_ZONE, parseTodayTime, parseTodayTimeRange } from "./utils";
 
 const pingCommand = new SlashCommandBuilder()
@@ -46,13 +49,33 @@ const registerCommand = new SlashCommandBuilder()
 
 const deregisterCommand = new SlashCommandBuilder()
   .setName("deregister")
-  .setDescription("Remove a member's registered enrollment number from this server.")
+  .setDescription("Remove registration data from this server.")
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-  .addUserOption((option) =>
-    option
+  .addSubcommand((subcommand) =>
+    subcommand
       .setName("member")
-      .setDescription("The member whose registration should be removed")
-      .setRequired(true)
+      .setDescription("Remove one member's saved enrollment number.")
+      .addUserOption((option) =>
+        option
+          .setName("user")
+          .setDescription("The member whose registration should be removed")
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("mismatched")
+      .setDescription("Remove every registered enrollment number that does not match student data.")
+  );
+
+const showCommand = new SlashCommandBuilder()
+  .setName("show")
+  .setDescription("Show admin views related to registrations and tracking.")
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("mismatched")
+      .setDescription("Show members whose registered enrollment numbers do not match student data.")
   );
 
 const trackingCommand = new SlashCommandBuilder()
@@ -125,7 +148,7 @@ const trackingCommand = new SlashCommandBuilder()
     subcommand.setName("status").setDescription("Show the active workshop and recent MUPC runs for this server.")
   );
 
-const commands = [pingCommand, helpCommand, registerCommand, deregisterCommand, trackingCommand];
+const commands = [pingCommand, helpCommand, registerCommand, deregisterCommand, showCommand, trackingCommand];
 
 const privateResponse = { flags: MessageFlags.Ephemeral as const };
 
@@ -134,8 +157,6 @@ const isUnknownInteractionError = (error: unknown) =>
 
 const canManageTracking = (interaction: ChatInputCommandInteraction) =>
   interaction.inCachedGuild() && Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
-
-const normalizeEnrollmentNo = (value: string) => value.trim().toUpperCase();
 
 const buildEmbed = (input: {
   title: string;
@@ -206,6 +227,58 @@ const getInteractionDisplayName = async (interaction: ChatInputCommandInteractio
   return member?.displayName ?? interaction.user.globalName ?? interaction.user.username;
 };
 
+const exampleEnrollmentNo = "EN24CS3010238";
+
+const buildMismatchReason = (enrollmentNo: string) =>
+  `No student-data match was found for **${enrollmentNo}**.`;
+
+const buildReregisterInstructions = () =>
+  [
+    "Your previous registration was removed because the enrollment number could not be matched with the current student data used for attendance exports.",
+    "Please register again using your correct enrollment number.",
+    `Example format: \`/register enrollmentno:${exampleEnrollmentNo}\``
+  ].join("\n\n");
+
+const getMismatchedRegistrations = async (guildId: string) => {
+  const studentNamesByEnrollment = await loadStudentNameLookup();
+  return registeredUserRepository
+    .listByGuild(guildId)
+    .filter((registration) => !isEnrollmentMatched(registration.enrollment_no, studentNamesByEnrollment))
+    .map((registration) => ({
+      ...registration,
+      studentName: getStudentNameForEnrollment(registration.enrollment_no, studentNamesByEnrollment),
+      mismatchReason: buildMismatchReason(registration.enrollment_no)
+    }));
+};
+
+const getGuildMemberMap = async (interaction: ChatInputCommandInteraction) => {
+  if (!interaction.inCachedGuild()) {
+    return new Map<string, GuildMember>();
+  }
+
+  const members = await interaction.guild.members.fetch().catch(() => null);
+  return new Map((members ? [...members.values()] : []).map((member) => [member.id, member]));
+};
+
+const sendMismatchDm = async (
+  member: GuildMember | null,
+  enrollmentNo: string
+) => {
+  if (!member) {
+    return false;
+  }
+
+  return sendDirectMessage(member.user, {
+    title: "Registration Removed",
+    description: buildReregisterInstructions(),
+    color: 0xffb869,
+    fields: [
+      { name: "Removed Enrollment No", value: enrollmentNo, inline: true },
+      { name: "Why", value: "It could not be matched with existing student data.", inline: true }
+    ]
+  });
+};
+
 async function handleHelp(interaction: ChatInputCommandInteraction) {
   await interaction.editReply({
     embeds: canManageTracking(interaction)
@@ -223,7 +296,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Admin Commands",
                 value:
-                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/deregister member:<user>`\nRemove a member's saved enrollment number.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
+                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/show mismatched`\nList members whose enrollment numbers do not match student data.\n\n`/deregister member user:<user>`\nRemove one member's saved enrollment number.\n\n`/deregister mismatched`\nBulk-remove mismatched registrations and DM those members.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
               },
               {
                 name: "Recommended Workflow",
@@ -241,7 +314,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Commands You Need",
                 value:
-                  "`/register enrollmentno:<your enrollment number>`\nRegister for this server so your attendance is matched correctly.\n\n`/help`\nShows this guide."
+                  "`/register enrollmentno:<your enrollment number>`\nRegister for this server so your attendance is matched correctly.\n\nFormat example: `EN24CS3010238`\n\n`/help`\nShows this guide."
               },
               {
                 name: "How Attendance Works",
@@ -508,6 +581,8 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
     username,
     enrollmentNo
   });
+  const studentNamesByEnrollment = await loadStudentNameLookup();
+  const matched = isEnrollmentMatched(enrollmentNo, studentNamesByEnrollment);
 
   await sendRegistryLogForGuild(interaction.guildId, {
     title: "Member Registered",
@@ -522,20 +597,30 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
   await interaction.editReply({
     embeds: [
       buildEmbed({
-        title: "Registration Complete",
-        description: `Your enrollment number is now saved as **${registered?.enrollment_no ?? enrollmentNo}**.`,
-        color: 0x67f0aa
+        title: matched ? "Registration Complete" : "Registration Saved With Warning",
+        description: matched
+          ? `Your enrollment number is now saved as **${registered?.enrollment_no ?? enrollmentNo}**.`
+          : `Your enrollment number is saved as **${registered?.enrollment_no ?? enrollmentNo}**, but it does not match the current student data yet. Please double-check the format.`,
+        color: matched ? 0x67f0aa : 0xffd85a,
+        fields: matched
+          ? []
+          : [
+              {
+                name: "Correct Format Example",
+                value: `/register enrollmentno:${exampleEnrollmentNo}`
+              }
+            ]
       })
     ]
   });
 }
 
-async function handleDeregister(interaction: ChatInputCommandInteraction) {
+async function handleDeregisterMember(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId) {
     throw new Error("This command must be used inside a server.");
   }
 
-  const member = interaction.options.getUser("member", true);
+  const member = interaction.options.getUser("user", true);
   const existing = registeredUserRepository.findByUserId(interaction.guildId, member.id);
 
   if (!existing) {
@@ -579,6 +664,126 @@ async function handleDeregister(interaction: ChatInputCommandInteraction) {
   });
 }
 
+async function handleDeregisterMismatched(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId) {
+    throw new Error("This command must be used inside a server.");
+  }
+
+  const mismatched = await getMismatchedRegistrations(interaction.guildId);
+  if (mismatched.length === 0) {
+    await interaction.editReply({
+      embeds: [
+        buildEmbed({
+          title: "No Mismatched Registrations",
+          description: "Every saved enrollment number currently matches the student data for this server.",
+          color: 0x67f0aa
+        })
+      ]
+    });
+    return;
+  }
+
+  const memberMap = await getGuildMemberMap(interaction);
+  const removedCount = registeredUserRepository.deleteManyByUserIds(
+    interaction.guildId,
+    mismatched.map((entry) => entry.user_id)
+  );
+
+  let dmSentCount = 0;
+  let dmFailedCount = 0;
+
+  for (const entry of mismatched) {
+    const member = memberMap.get(entry.user_id) ?? null;
+    const sent = await sendMismatchDm(member, entry.enrollment_no);
+    if (sent) {
+      dmSentCount += 1;
+    } else {
+      dmFailedCount += 1;
+    }
+  }
+
+  await sendRegistryLogForGuild(interaction.guildId, {
+    title: "Mismatched Registrations Deregistered",
+    description: "Bulk cleanup removed registrations that could not be matched with current student data.",
+    color: 0xffb869,
+    fields: [
+      { name: "Removed", value: String(removedCount), inline: true },
+      { name: "DM Sent", value: String(dmSentCount), inline: true },
+      { name: "DM Failed", value: String(dmFailedCount), inline: true },
+      {
+        name: "Examples",
+        value: mismatched
+          .slice(0, 5)
+          .map((entry) => `${entry.username} - ${entry.enrollment_no}`)
+          .join("\n")
+      }
+    ]
+  });
+
+  await interaction.editReply({
+    embeds: [
+      buildEmbed({
+        title: "Mismatched Members Deregistered",
+        description:
+          "Removed all registrations that could not be matched with the student data used for exports.",
+        color: 0xffb869,
+        fields: [
+          { name: "Removed", value: String(removedCount), inline: true },
+          { name: "DM Sent", value: String(dmSentCount), inline: true },
+          { name: "DM Failed", value: String(dmFailedCount), inline: true },
+          {
+            name: "Re-register Example",
+            value: `/register enrollmentno:${exampleEnrollmentNo}`
+          }
+        ]
+      })
+    ]
+  });
+}
+
+async function handleShowMismatched(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId) {
+    throw new Error("This command must be used inside a server.");
+  }
+
+  const mismatched = await getMismatchedRegistrations(interaction.guildId);
+  if (mismatched.length === 0) {
+    await interaction.editReply({
+      embeds: [
+        buildEmbed({
+          title: "No Mismatched Registrations",
+          description: "Every saved enrollment number currently matches the student data for this server.",
+          color: 0x67f0aa
+        })
+      ]
+    });
+    return;
+  }
+
+  const chunks: typeof mismatched[] = [];
+  for (let index = 0; index < mismatched.length; index += 6) {
+    chunks.push(mismatched.slice(index, index + 6));
+  }
+
+  await interaction.editReply({
+    embeds: chunks.slice(0, 4).map((chunk, chunkIndex) =>
+      buildEmbed({
+        title: chunkIndex === 0 ? "Mismatched Registrations" : `Mismatched Registrations (${chunkIndex + 1})`,
+        description:
+          chunkIndex === 0
+            ? "These members are registered, but their enrollment numbers could not be matched with student data."
+            : undefined,
+        color: 0xffd85a,
+        fields: chunk.map((entry) => ({
+          name: `${entry.username} (${entry.enrollment_no})`,
+          value: `${entry.mismatchReason}\n<@${entry.user_id}>`,
+          inline: false
+        }))
+      })
+    )
+  });
+}
+
 export async function registerSlashCommands(guildIds: string[]) {
   if (guildIds.length === 0) {
     return;
@@ -596,7 +801,8 @@ export async function registerSlashCommands(guildIds: string[]) {
 
 export async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
   try {
-    await interaction.deferReply(privateResponse);
+    const shouldReplyPrivately = interaction.commandName !== "show";
+    await interaction.deferReply(shouldReplyPrivately ? privateResponse : undefined);
 
     if (interaction.commandName === "ping") {
       await interaction.editReply({
@@ -626,7 +832,22 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
         return;
       }
 
-      await handleDeregister(interaction);
+      const subcommand = interaction.options.getSubcommand(true);
+      if (subcommand === "mismatched") {
+        await handleDeregisterMismatched(interaction);
+        return;
+      }
+
+      await handleDeregisterMember(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "show") {
+      if (!(await ensureStaffAccess(interaction))) {
+        return;
+      }
+
+      await handleShowMismatched(interaction);
       return;
     }
 

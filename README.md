@@ -7,8 +7,11 @@ A Discord attendance bot and dashboard for MUPC workshops. It tracks voice atten
 - tracks attendance across all voice and stage channels in a Discord server
 - stores per-server registration data mapped to enrollment numbers
 - matches enrollment numbers against Excel student data in `stud_data`
+- creates and syncs a green `registered` role for registered members
 - shows mismatched registrations and supports bulk cleanup
+- audits missing registered roles with `/show registered-role`
 - renames eligible registered members to their student names with `/rename registered`
+- refreshes old nickname formatting with `/rename update`
 - writes attendance logs to `#attendance-logs`
 - writes private registration logs to `#user-registry-logs`
 - provides a password-protected dashboard for runs, users, exports, and analytics
@@ -33,9 +36,11 @@ A Discord attendance bot and dashboard for MUPC workshops. It tracks voice atten
 /tracking cancel runid:<id>
 /tracking status
 /show mismatched
+/show registered-role
 /deregister member user:<user>
 /deregister mismatched
 /rename registered
+/rename update
 /help
 /ping
 ```
@@ -47,9 +52,14 @@ A Discord attendance bot and dashboard for MUPC workshops. It tracks voice atten
 3. Student names are resolved from Excel files in `stud_data`.
 4. Admins can review problems with `/show mismatched`.
 5. Admins can remove bad entries with `/deregister mismatched`.
-6. Admins can rename eligible members with `/rename registered`.
+6. The bot creates or reuses a `registered` role and syncs it to registered members.
+7. Admins can audit role sync issues with `/show registered-role`.
+8. Admins can rename eligible members with `/rename registered`.
+9. Admins can refresh old all-caps or messy nickname formatting with `/rename update`.
 
 `/rename registered` only attempts members who have no extra roles beyond `@everyone`, or exactly one extra role named `member`. It skips unmatched enrollments, unmanageable members, and members whose names are already correct.
+
+`/rename update` is the safer cleanup command for older nickname formatting. It only updates registered members whose current nickname is already the same name in a stale format, such as all caps or inconsistent spacing.
 
 ## Tracking workflow
 
@@ -85,9 +95,19 @@ The bot reads all matching Excel files, builds an enrollment-to-name lookup, and
 The bot creates these channels when possible:
 
 - `#attendance-logs` for tracking start/stop/scheduler events
-- `#user-registry-logs` for private registration, deregistration, mismatch cleanup, and rename logs
+- `#user-registry-logs` for private registration, deregistration, mismatch cleanup, role-audit, and rename logs
 
 The registry log channel is created with restricted visibility for admins and the bot.
+
+## Registered role sync
+
+The bot keeps a role named `registered` in sync with the enrollment registry.
+
+- it creates the role automatically if it is missing
+- it assigns the role during `/register`
+- it removes the role during deregistration
+- it backfills the role for existing registered users on startup
+- `/show registered-role` explains who is still missing the role and why
 
 ## Requirements
 
@@ -99,6 +119,7 @@ The registry log channel is created with restricted visibility for admins and th
   - view channels
   - send messages
   - read message history
+  - manage roles if you want registered-role sync to work reliably
   - manage nicknames if you want `/rename registered` to work reliably
 
 ## Environment variables
@@ -157,4 +178,5 @@ npm start
 - registrations are stored per Discord server
 - slash commands are registered per guild on startup
 - scheduled runs are checked periodically and start/stop automatically
+- role sync and nickname updates can still be blocked by Discord role hierarchy
 - if the bot cannot rename someone, the command summary will show it under `Not Manageable` or `Rename Failed`

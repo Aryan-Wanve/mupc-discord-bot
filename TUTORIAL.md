@@ -213,6 +213,21 @@ If you want to review members whose saved enrollment numbers do not match the cu
 This shows an admin-only embed with the members who need to fix their registration.
 It posts the list in Discord as embeds so the core/head can review it quickly.
 
+### Check registered role sync
+
+If you want to see whether registered people are missing the `registered` role, use:
+
+```text
+/show registered-role
+```
+
+This command shows:
+
+1. how many registered users already have the role
+2. how many are missing it
+3. whether the bot can manage the role
+4. likely reasons when someone is missing the role
+
 ### Rename registered members to their real names
 
 If you want to rename registered members using the student name from their enrollment number, use:
@@ -229,6 +244,21 @@ This command only tries to rename people who:
 The command skips members whose enrollment number does not match student data, members the bot cannot manage because of Discord role hierarchy, and members whose names already match.
 
 The bot also writes a summary of renamed and skipped members in the private registry log channel.
+
+### Refresh old nickname formatting
+
+If some registered users still have old all-caps or messy nicknames from earlier formatting, use:
+
+```text
+/rename update
+```
+
+This command is specifically for cleanup. It only updates members whose current nickname is already the same registered name in an outdated format, for example:
+
+- `ARYAN WANVE` -> `Aryan Wanve`
+- names with extra spaces -> clean spacing
+
+It does not try to broadly rename unrelated nicknames.
 
 ### Deregister a member
 
@@ -267,7 +297,9 @@ This includes:
 - new registrations
 - deregistrations
 - mismatched cleanup actions
+- registered role audit results
 - `/rename registered` results
+- `/rename update` results
 
 Attendance run updates are sent separately to:
 
@@ -294,9 +326,11 @@ This is the easiest way to use the bot during a real session.
 1. Ask students to register using `/register enrollmentno:<their enrollment number>`
 2. Confirm that the bot is online with `/ping`
 3. If needed, check incorrect registrations with `/show mismatched`
-4. If needed, fix bad entries with `/deregister mismatched`
-5. Optionally run `/rename registered` to align eligible member nicknames with student data
-6. Start or schedule tracking
+4. If needed, audit role sync with `/show registered-role`
+5. If needed, fix bad entries with `/deregister mismatched`
+6. Optionally run `/rename registered` to align eligible member nicknames with student data
+7. Optionally run `/rename update` to clean old nickname formatting
+8. Start or schedule tracking
 
 ### During the workshop
 
@@ -493,8 +527,10 @@ Coordinator schedules the workshop:
 /tracking cancel runid:<id>
 /tracking status
 /show mismatched
+/show registered-role
 /deregister mismatched
 /rename registered
+/rename update
 /deregister member:<user>
 /help
 /ping
@@ -524,6 +560,12 @@ Usually one of these reasons:
 - their enrollment number does not match current student data
 - the bot cannot manage their nickname because of Discord role hierarchy
 - their current display name already matches the student name
+
+### When should I use `/rename update` instead of `/rename registered`?
+
+Use `/rename update` when the nickname is already basically correct but still stuck in old formatting, like all caps or messy spacing.
+
+Use `/rename registered` when you want the bot to set eligible registered members to the student-data name in general.
 
 ### What if a coordinator forgets the run ID?
 

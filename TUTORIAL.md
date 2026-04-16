@@ -213,6 +213,23 @@ If you want to review members whose saved enrollment numbers do not match the cu
 This shows an admin-only embed with the members who need to fix their registration.
 It posts the list in Discord as embeds so the core/head can review it quickly.
 
+### Rename registered members to their real names
+
+If you want to rename registered members using the student name from their enrollment number, use:
+
+```text
+/rename registered
+```
+
+This command only tries to rename people who:
+
+1. have no extra roles beyond `@everyone`
+2. or have exactly one extra role named `member`
+
+The command skips members whose enrollment number does not match student data, members the bot cannot manage because of Discord role hierarchy, and members whose names already match.
+
+The bot also writes a summary of renamed and skipped members in the private registry log channel.
+
 ### Deregister a member
 
 If a member registered the wrong enrollment number or needs to be removed, an admin can use:
@@ -237,6 +254,27 @@ This does three things:
 2. sends each affected member a direct message explaining why
 3. tells them to register again using the correct format
 
+### Understand the registry log channel
+
+The bot keeps registration-related logs in a private text channel named:
+
+```text
+#user-registry-logs
+```
+
+This includes:
+
+- new registrations
+- deregistrations
+- mismatched cleanup actions
+- `/rename registered` results
+
+Attendance run updates are sent separately to:
+
+```text
+#attendance-logs
+```
+
 ### Open the help message
 
 Use:
@@ -255,7 +293,10 @@ This is the easiest way to use the bot during a real session.
 
 1. Ask students to register using `/register enrollmentno:<their enrollment number>`
 2. Confirm that the bot is online with `/ping`
-3. Start or schedule tracking
+3. If needed, check incorrect registrations with `/show mismatched`
+4. If needed, fix bad entries with `/deregister mismatched`
+5. Optionally run `/rename registered` to align eligible member nicknames with student data
+6. Start or schedule tracking
 
 ### During the workshop
 
@@ -451,9 +492,18 @@ Coordinator schedules the workshop:
 /tracking schedule-start title:<name> start:<HH:mm>
 /tracking cancel runid:<id>
 /tracking status
+/show mismatched
+/deregister mismatched
+/rename registered
 /deregister member:<user>
 /help
 /ping
+```
+
+The correct single-member deregister format is:
+
+```text
+/deregister member user:<user>
 ```
 
 ## Common doubts
@@ -465,6 +515,15 @@ No. After registration, students only need to be in the right voice channel whil
 ### Do all students need to register?
 
 Yes, if you want the exported attendance to map cleanly to enrollment numbers.
+
+### Why did `/rename registered` skip some people?
+
+Usually one of these reasons:
+
+- they have roles other than `member`
+- their enrollment number does not match current student data
+- the bot cannot manage their nickname because of Discord role hierarchy
+- their current display name already matches the student name
 
 ### What if a coordinator forgets the run ID?
 

@@ -331,7 +331,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Recommended Workflow",
                 value:
-                  "1. Ask members to use `/register` in the same server.\n2. Use `/tracking start` for immediate sessions, `/tracking schedule` for fixed windows, or `/tracking schedule-start` when the ending time is not fixed.\n3. Use `/tracking status` to confirm the run ID and state.\n4. Use `/tracking stop` when the workshop ends, or `/tracking cancel` if a scheduled run should not happen.\n5. Review the server-specific dashboard and exports."
+                  "1. Ask members to use `/register` in the same server.\n2. Review `/show mismatched` and use `/deregister mismatched` if student-data cleanup is needed.\n3. Optionally use `/rename registered` to align eligible nicknames with student data.\n4. Use `/tracking start` for immediate sessions, `/tracking schedule` for fixed windows, or `/tracking schedule-start` when the ending time is not fixed.\n5. Use `/tracking status` to confirm the run ID and state.\n6. Use `/tracking stop` when the workshop ends, or `/tracking cancel` if a scheduled run should not happen.\n7. Review the server-specific dashboard and exports."
                 }
               ]
             })

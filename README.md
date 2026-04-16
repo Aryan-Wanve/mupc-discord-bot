@@ -1,150 +1,121 @@
-# MUPC Discord Webinar Attendance Bot
+# MUPC Attendance Bot
 
-A production-style Discord attendance system built to track webinar presence inside voice channels and give organizers a clean way to review and export timed attendance records.
+A Discord attendance bot and dashboard for MUPC workshops. It tracks voice attendance across a server, lets members register enrollment numbers, helps admins clean registration data, and exports attendance plus user analytics from a local dashboard.
 
-This project is meant for a practical use case: running webinars in Discord and measuring how long each participant actually stayed in the voice channel. Instead of manually checking names or screenshots, the bot records join and leave windows, stores them in a local database, and exposes the data through a simple dashboard where attendance can be reviewed and exported as CSV.
+## What it does
 
-The goal was to make something operational, not just experimental. So rather than building only a Discord bot, I built a small full-stack tool around it:
+- tracks attendance across all voice and stage channels in a Discord server
+- stores per-server registration data mapped to enrollment numbers
+- matches enrollment numbers against Excel student data in `stud_data`
+- shows mismatched registrations and supports bulk cleanup
+- renames eligible registered members to their student names with `/rename registered`
+- writes attendance logs to `#attendance-logs`
+- writes private registration logs to `#user-registry-logs`
+- provides a password-protected dashboard for runs, users, exports, and analytics
 
-- a Discord bot that listens for voice channel activity
-- a built-in SQLite database for storing webinar sessions and attendance logs
-- a browser dashboard for creating webinars, starting and stopping tracking, and downloading attendance sheets
+## Slash commands
 
-## Project Purpose
+### Member commands
 
-This bot is designed to solve a real attendance problem:
+```text
+/register enrollmentno:<your enrollment number>
+/help
+/ping
+```
 
-- track who joined a webinar voice channel
-- measure how long each person stayed
-- keep exact marked timings for join and leave windows
-- make attendance easy to review after the session
-- export records into CSV format for admin work, reporting, or proof of participation
+### Admin commands
 
-Instead of treating attendance as a one-off manual task, this project approaches it like a small internal product:
+```text
+/tracking start [title]
+/tracking stop
+/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>
+/tracking schedule-start title:<name> start:<HH:mm>
+/tracking cancel runid:<id>
+/tracking status
+/show mismatched
+/deregister member user:<user>
+/deregister mismatched
+/rename registered
+/help
+/ping
+```
 
-- clear separation between bot logic, storage, and dashboard
-- reliable local persistence through SQLite
-- start and stop controls so only the actual webinar window is counted
-- exportable reporting for practical use after the event
+## Registration workflow
 
-## What The System Includes
+1. Members register with `/register enrollmentno:<value>`.
+2. The bot stores the registration per guild in SQLite.
+3. Student names are resolved from Excel files in `stud_data`.
+4. Admins can review problems with `/show mismatched`.
+5. Admins can remove bad entries with `/deregister mismatched`.
+6. Admins can rename eligible members with `/rename registered`.
 
-### 1. Discord voice attendance tracking
+`/rename registered` only attempts members who have no extra roles beyond `@everyone`, or exactly one extra role named `member`. It skips unmatched enrollments, unmanageable members, and members whose names are already correct.
 
-The bot listens for voice state changes in Discord and watches a configured voice channel for a specific webinar. When a user joins while the webinar is active, the bot records a session start. When the user leaves, it records the session end.
+## Tracking workflow
 
-This makes it possible to calculate actual voice attendance instead of relying on static member lists.
+1. Start a run immediately with `/tracking start` or schedule it with `/tracking schedule`.
+2. The bot watches every voice/stage channel in that server while the run is active.
+3. Attendance sessions are recorded as members join, leave, or switch channels.
+4. Stop the run with `/tracking stop`, or let a scheduled run stop automatically.
+5. Review the run and exports from the dashboard.
 
-### 2. Webinar-based session management
+## Dashboard
 
-Attendance is grouped per webinar. Each webinar has:
+The dashboard runs on `http://localhost:3000` by default and is protected by the configured username and password.
 
-- a title
-- a Discord server ID
-- a target voice channel ID
-- optional notes
-- start and stop state
+Main areas:
 
-This keeps separate events isolated from each other so you can run multiple webinar records over time without mixing attendance data.
+- server overview
+- run listing and run detail pages
+- registered users and attendance analytics
+- mismatched registration review
+- Excel exports for runs and user views
 
-### 3. Built-in SQLite database
+## Student data
 
-The project uses SQLite through `better-sqlite3`, which keeps setup simple while still giving permanent storage for:
+Put `.xlsx` files inside `stud_data`. Each sheet should contain headers that normalize to:
 
-- webinar definitions
-- attendance sessions
-- active and completed attendance windows
+- `Student Name`
+- `Enrollment No`
 
-Because the database is local, this is easy to run for small to medium use cases without deploying a separate database server.
+The bot reads all matching Excel files, builds an enrollment-to-name lookup, and uses that for registration validation, mismatch detection, exports, and `/rename registered`.
 
-### 4. Dashboard for admins
+## Log channels
 
-The dashboard provides a browser-based control panel where you can:
+The bot creates these channels when possible:
 
-- create a webinar
-- enter the Discord guild ID and voice channel ID
-- start tracking when the webinar begins
-- stop tracking when the webinar ends
-- review the attendance summary for each user
-- download CSV exports
+- `#attendance-logs` for tracking start/stop/scheduler events
+- `#user-registry-logs` for private registration, deregistration, mismatch cleanup, and rename logs
 
-The dashboard is protected with HTTP Basic Auth using credentials from the environment file.
+The registry log channel is created with restricted visibility for admins and the bot.
 
-### 5. CSV export with marked timings
-
-Each webinar can be exported as a CSV attendance sheet. The export includes:
-
-- user ID
-- username
-- total seconds attended
-- formatted total duration
-- marked timing windows in `joined_at -> left_at` format
-
-This makes it useful for attendance verification, internal record keeping, or follow-up reporting after the webinar.
-
-## Tech Stack
+## Requirements
 
 - Node.js
-- TypeScript
-- Discord.js
-- Express
-- EJS
-- SQLite
-- better-sqlite3
+- a Discord application with:
+  - `SERVER MEMBERS INTENT`
+  - `GUILD VOICE STATES INTENT`
+- a bot invite that can:
+  - view channels
+  - send messages
+  - read message history
+  - manage nicknames if you want `/rename registered` to work reliably
 
-## Architecture Notes
+## Environment variables
 
-### App structure
+Create a `.env` file with:
 
-- `src/index.ts`
-  Starts both the Discord bot and the web dashboard.
+```env
+DISCORD_TOKEN=your_discord_bot_token
+CLIENT_ID=your_discord_application_client_id
+PORT=3000
+SESSION_SECRET=change-me
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=change-me
+DATABASE_PATH=./data/attendance.sqlite
+```
 
-- `src/bot.ts`
-  Handles Discord login, voice state listeners, and start/stop webinar tracking behavior.
-
-- `src/attendanceTracker.ts`
-  Coordinates active attendance sessions and keeps open session tracking consistent.
-
-- `src/db.ts`
-  Creates the SQLite schema and contains the database queries for webinars and attendance sessions.
-
-- `src/server.ts`
-  Runs the Express dashboard, webinar actions, and CSV export endpoints.
-
-- `views/index.ejs`
-  Main dashboard UI for webinar creation, attendance review, and downloads.
-
-- `public/styles.css`
-  Styling for the dashboard interface.
-
-## How Attendance Works
-
-The workflow is intentionally simple:
-
-1. Create a webinar from the dashboard.
-2. Enter the Discord server ID and voice channel ID you want to monitor.
-3. Click `Start tracking` when the webinar begins.
-4. Let the session run while the bot records joins and leaves.
-5. Click `Stop tracking` when the webinar ends.
-6. Download the CSV report from the dashboard.
-
-If members are already inside the voice channel when tracking starts, the bot picks them up immediately and starts their session from that point onward.
-
-## Required Discord Configuration
-
-To run properly, the Discord application should have the following privileged intents enabled in the Discord Developer Portal:
-
-- `SERVER MEMBERS INTENT`
-- `GUILD VOICE STATES INTENT`
-
-The bot should also be invited with enough permissions to:
-
-- view channels
-- read basic member information
-
-No moderation permissions are required for basic attendance tracking.
-
-## Local Development
+## Local development
 
 Install dependencies:
 
@@ -158,7 +129,7 @@ Run in development mode:
 npm run dev
 ```
 
-Build for production:
+Build:
 
 ```bash
 npm run build
@@ -170,77 +141,20 @@ Start the compiled app:
 npm start
 ```
 
-The dashboard runs by default at:
+## Project structure
 
-```text
-http://localhost:3000
-```
+- `src/bot.ts` handles Discord login, logs, and voice attendance tracking
+- `src/commands.ts` defines slash commands and registration admin flows
+- `src/db.ts` owns SQLite schema setup and repositories
+- `src/server.ts` serves the dashboard and exports
+- `src/studentData.ts` loads Excel student data and enrollment matching
+- `views/` contains dashboard templates
+- `public/` contains dashboard assets
+- `TUTORIAL.md` is the operator guide for club heads and cores
 
-## Environment Variables
+## Notes
 
-Create a local environment file:
-
-```bash
-.env
-```
-
-Expected variables:
-
-```env
-DISCORD_TOKEN=your_discord_bot_token
-CLIENT_ID=your_discord_application_client_id
-PORT=3000
-SESSION_SECRET=change-me
-DASHBOARD_USERNAME=admin
-DASHBOARD_PASSWORD=change-me
-DATABASE_PATH=./data/attendance.sqlite
-```
-
-Notes:
-
-- `DISCORD_TOKEN` is required for the bot to log in
-- `CLIENT_ID` should match your Discord application
-- `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD` protect the dashboard
-- `DATABASE_PATH` controls where the SQLite file is stored locally
-
-## Why I Built It This Way
-
-The useful part of this project is that it connects three things that often get handled separately:
-
-- live Discord activity
-- persistent attendance storage
-- admin-friendly reporting
-
-A lot of small internal bots stop at logging events into the console or dumping rough data into chat. I wanted this one to go further and feel like a proper tool someone could actually use during real webinar operations.
-
-That is why the project combines a bot with a small web dashboard and export flow instead of treating attendance tracking as only a background script.
-
-## Current Product Direction
-
-This project is currently focused on being:
-
-- simple to run locally
-- reliable for webinar attendance counting
-- practical for admins who need exportable records
-- structured well enough to grow into a more polished internal tool
-
-## Future Improvements
-
-- slash commands for creating and controlling webinars from Discord
-- role-based dashboard auth instead of basic auth
-- better webinar filtering and search in the dashboard
-- hosted deployment configuration
-- automatic participant summaries or attendance thresholds
-- cleaner analytics and visual charts for attendance trends
-
-## Author
-
-**Aryan Wanve**
-
-Engineering student building practical software projects and systems with real use cases.
-
-GitHub: [Aryan-Wanve](https://github.com/Aryan-Wanve)
-
-## Status
-
-Active project and working first version for Discord webinar voice attendance tracking.
+- registrations are stored per Discord server
+- slash commands are registered per guild on startup
+- scheduled runs are checked periodically and start/stop automatically
+- if the bot cannot rename someone, the command summary will show it under `Not Manageable` or `Rename Failed`

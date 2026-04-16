@@ -624,6 +624,10 @@ body::after {
   animation-delay: 190ms;
 }
 
+.mini-card:nth-child(4) {
+  animation-delay: 250ms;
+}
+
 .mini-card strong {
   display: block;
   font-family: var(--font-display);
@@ -693,6 +697,10 @@ h3 {
   font-size: 1rem;
   line-height: 1.72;
   font-weight: 500;
+}
+
+.compact-intro {
+  margin-bottom: 18px;
 }
 
 .grid-layout {
@@ -1076,6 +1084,11 @@ button:hover {
     0 16px 36px rgba(10, 18, 30, 0.45);
 }
 
+.warning-link {
+  border-color: rgba(255, 216, 90, 0.4);
+  background: linear-gradient(135deg, rgba(255, 216, 90, 0.22), rgba(255, 184, 105, 0.24));
+}
+
 .status {
   padding: 9px 14px;
   border-radius: 999px;
@@ -1104,6 +1117,37 @@ button:hover {
   background: linear-gradient(135deg, rgba(255, 216, 90, 0.95), rgba(255, 184, 105, 0.94));
   border-color: rgba(255, 216, 90, 0.5);
   box-shadow: 0 0 22px rgba(255, 216, 90, 0.28);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-matched {
+  color: #072514;
+  background: rgba(103, 240, 170, 0.92);
+  border-color: rgba(103, 240, 170, 0.52);
+}
+
+.status-mismatched {
+  color: #fff1d8;
+  background: rgba(255, 184, 105, 0.16);
+  border-color: rgba(255, 184, 105, 0.36);
+}
+
+.status-unregistered {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .report {

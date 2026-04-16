@@ -29,6 +29,7 @@
               <a href="<%= serverBasePath %>" class="button-link <%= currentPage === "runs" ? "is-active" : "secondary-link" %>">Runs</a>
               <a href="<%= serverBasePath %>/users" class="button-link <%= currentPage === "users" ? "is-active" : "secondary-link" %>">Users DB</a>
               <a href="<%= serverBasePath %>/users/export.xlsx" class="button-link">Download Users Excel</a>
+              <a href="<%= serverBasePath %>/users/mismatched.xlsx" class="button-link warning-link">Download Mismatched Data</a>
             </div>
           </div>
 
@@ -40,6 +41,10 @@
             <div class="mini-card">
               <strong><%= totalRegisteredJoinedUsers %> / <%= totalJoinedUsers %></strong>
               <span>Registered users vs workshop joiners</span>
+            </div>
+            <div class="mini-card">
+              <strong><%= mismatchedUsers.length %></strong>
+              <span>Registered members needing enrollment fixes</span>
             </div>
             <div class="mini-card">
               <strong><%= sessions.length %></strong>
@@ -69,6 +74,7 @@
                     <tr>
                       <th>User</th>
                       <th>Enrollment No</th>
+                      <th>Student Data</th>
                       <th>Status</th>
                       <th>Registered</th>
                       <th>Last updated</th>
@@ -79,9 +85,61 @@
                       <tr>
                         <td><strong><%= user.username %></strong><br /><small><%= user.user_id %></small></td>
                         <td><%= user.enrollment_no %></td>
-                        <td><%= user.enrollment_no === "Not registered" ? "Unregistered" : "Registered" %></td>
+                        <td><%= user.student_name %></td>
+                        <td>
+                          <span class="status-pill status-<%= user.match_status.toLowerCase() %>">
+                            <%= user.match_status %>
+                          </span>
+                        </td>
                         <td><%= user.registered_display %></td>
                         <td><%= user.updated_display %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </section>
+
+          <section class="card" data-live-region="mismatched-users">
+            <div class="page-title-row">
+              <div>
+                <p class="eyebrow">Mismatch Queue</p>
+                <h2>Enrollment numbers that do not match student data</h2>
+              </div>
+              <span class="muted-chip"><%= mismatchedUsers.length %> flagged</span>
+            </div>
+
+            <p class="intro compact-intro">
+              These members have registered, but their enrollment numbers could not be matched against the
+              Excel sheets in <strong>stud_data</strong>. You can export this list, review it in Discord with
+              <strong>/show mismatched</strong>, or clean it up with <strong>/deregister mismatched</strong>.
+            </p>
+
+            <% if (mismatchedUsers.length === 0) { %>
+              <p class="empty-inline">Everything looks clean. No mismatched registrations were found for this server.</p>
+            <% } else { %>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Enrollment No</th>
+                      <th>Issue</th>
+                      <th>Workshops</th>
+                      <th>Total time</th>
+                      <th>Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% mismatchedUsers.forEach((user) => { %>
+                      <tr>
+                        <td><strong><%= user.username %></strong><br /><small><%= user.userId %></small></td>
+                        <td><%= user.enrollmentNo %></td>
+                        <td><%= user.mismatchReason %></td>
+                        <td><%= user.totalRunsJoined %></td>
+                        <td><%= user.totalDuration %></td>
+                        <td><%= user.updatedDisplay %></td>
                       </tr>
                     <% }) %>
                   </tbody>
@@ -187,16 +245,16 @@
                 <div class="stat-value">/register</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Duplicate Handling</div>
-                <div class="stat-value">Blocked</div>
+                <div class="stat-label">Matched</div>
+                <div class="stat-value"><%= matchedRegistrationCount %></div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">User Export</div>
-                <div class="stat-value">CSV Ready</div>
+                <div class="stat-label">Mismatched</div>
+                <div class="stat-value"><%= mismatchedUsers.length %></div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Analytics</div>
-                <div class="stat-value">Per server</div>
+                <div class="stat-label">Cleanup Tools</div>
+                <div class="stat-value">DM + export</div>
               </div>
             </div>
           </section>

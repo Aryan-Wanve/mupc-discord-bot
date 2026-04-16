@@ -24,7 +24,13 @@ import {
   startTrackingForGuild,
   stopTrackingForGuild
 } from "./bot";
-import { getStudentNameForEnrollment, isEnrollmentMatched, loadStudentNameLookup, normalizeEnrollmentNo } from "./studentData";
+import {
+  formatStudentDisplayName,
+  getStudentNameForEnrollment,
+  isEnrollmentMatched,
+  loadStudentNameLookup,
+  normalizeEnrollmentNo
+} from "./studentData";
 import { formatScheduleWindow, IST_TIME_ZONE, parseTodayTime, parseTodayTimeRange } from "./utils";
 
 const pingCommand = new SlashCommandBuilder()
@@ -888,11 +894,16 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
       continue;
     }
 
-    const targetName = getStudentNameForEnrollment(registration.enrollment_no, studentNamesByEnrollment);
-    if (targetName === "-" || targetName === "Data not available") {
+    const resolvedStudentName = getStudentNameForEnrollment(
+      registration.enrollment_no,
+      studentNamesByEnrollment
+    );
+    if (resolvedStudentName === "-" || resolvedStudentName === "Data not available") {
       skippedMissingNameCount += 1;
       continue;
     }
+
+    const targetName = formatStudentDisplayName(resolvedStudentName);
 
     if (!member.manageable) {
       skippedUnmanageableCount += 1;

@@ -2,11 +2,11 @@
 import ExcelJS from "exceljs";
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import express, { NextFunction, Request, Response } from "express";
-import fs from "fs";
 import path from "path";
 import { discordClient } from "./bot";
 import { config } from "./config";
 import { registeredUserRepository, trackingRunRepository, trackingSessionRepository } from "./db";
+import { getStudentNameForEnrollment, isEnrollmentMatched, loadStudentNameLookup } from "./studentData";
 import { formatDateTime, formatDuration, formatPercentage } from "./utils";
 
 const app = express();
@@ -186,15 +186,22 @@ type ServerSummary = {
   latestActivityDisplay: string;
 };
 
+type MismatchedUserRow = {
+  userId: string;
+  username: string;
+  discordUsername: string;
+  enrollmentNo: string;
+  studentName: string;
+  mismatchReason: string;
+  registeredDisplay: string;
+  updatedDisplay: string;
+  totalRunsJoined: number;
+  totalSessions: number;
+  totalDuration: string;
+};
+
 const createSnapshot = (value: unknown) =>
   createHash("sha1").update(JSON.stringify(value)).digest("hex").slice(0, 12);
-const studentDataDirectory = path.join(process.cwd(), "stud_data");
-let studentNameLookupCache:
-  | {
-      fingerprint: string;
-      byEnrollment: Map<string, string>;
-    }
-  | null = null;
 
 const getGuildName = (guildId: string) => discordClient.guilds.cache.get(guildId)?.name ?? `Server ${guildId}`;
 const getGuildIconUrl = (guildId: string) =>
@@ -203,84 +210,6 @@ const getGuildIconUrl = (guildId: string) =>
 const filterRunsByGuild = (guildId: string) => trackingRunRepository.listByGuild(guildId);
 const filterSessionsByGuild = (guildId: string) =>
   trackingSessionRepository.listAll().filter((session) => session.guild_id === guildId);
-
-const normalizeHeaderKey = (value: unknown) =>
-  String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-
-const getStudentDataFingerprint = (files: fs.Dirent[]) =>
-  files
-    .map((file) => {
-      const fullPath = path.join(studentDataDirectory, file.name);
-      const stats = fs.statSync(fullPath);
-      return `${file.name}:${stats.mtimeMs}:${stats.size}`;
-    })
-    .sort()
-    .join("|");
-
-const loadStudentNameLookup = async () => {
-  if (!fs.existsSync(studentDataDirectory)) {
-    return new Map<string, string>();
-  }
-
-  const files = fs
-    .readdirSync(studentDataDirectory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".xlsx"));
-  const fingerprint = getStudentDataFingerprint(files);
-
-  if (studentNameLookupCache?.fingerprint === fingerprint) {
-    return studentNameLookupCache.byEnrollment;
-  }
-
-  const byEnrollment = new Map<string, string>();
-
-  for (const file of files) {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(path.join(studentDataDirectory, file.name));
-
-    for (const worksheet of workbook.worksheets) {
-      const headerRow = worksheet.getRow(1);
-      const headerIndexByKey = new Map<string, number>();
-
-      headerRow.eachCell((cell, columnNumber) => {
-        headerIndexByKey.set(normalizeHeaderKey(cell.value), columnNumber);
-      });
-
-      const studentNameColumn = headerIndexByKey.get("studentname");
-      const enrollmentColumn = headerIndexByKey.get("enrollmentno");
-
-      if (!studentNameColumn || !enrollmentColumn) {
-        continue;
-      }
-
-      worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) {
-          return;
-        }
-
-        const enrollmentNo = String(row.getCell(enrollmentColumn).value ?? "").trim().toUpperCase();
-        const studentName = String(row.getCell(studentNameColumn).value ?? "").trim();
-
-        if (enrollmentNo && studentName && !byEnrollment.has(enrollmentNo)) {
-          byEnrollment.set(enrollmentNo, studentName);
-        }
-      });
-    }
-  }
-
-  studentNameLookupCache = { fingerprint, byEnrollment };
-  return byEnrollment;
-};
-
-const getStudentNameForEnrollment = (enrollmentNo: string, studentNamesByEnrollment: Map<string, string>) => {
-  if (!enrollmentNo || enrollmentNo === "Not registered") {
-    return "-";
-  }
-
-  return studentNamesByEnrollment.get(enrollmentNo.trim().toUpperCase()) ?? "data not availabe";
-};
 
 const getExportEnrollmentNo = (enrollmentNo: string) =>
   !enrollmentNo || enrollmentNo === "Not registered" ? "NA" : enrollmentNo;
@@ -914,6 +843,7 @@ const buildUsersPageData = async (guildId: string) => {
   const users = buildUserAnalytics(guildId);
   const sessionsForGuild = filterSessionsByGuild(guildId);
   const guildMembers = await listKnownGuildMembers(guildId);
+  const studentNamesByEnrollment = await loadStudentNameLookup();
 
   const registrationMap = new Map(
     registeredUserRepository
@@ -952,16 +882,47 @@ const buildUsersPageData = async (guildId: string) => {
   const registrations = [...trackedUsers.values()]
     .map((user) => {
       const registration = registrationMap.get(user.user_id);
+      const enrollmentNo = registration?.enrollment_no ?? "Not registered";
+      const isMatched = isEnrollmentMatched(enrollmentNo, studentNamesByEnrollment);
+      const studentName = isMatched
+        ? getStudentNameForEnrollment(enrollmentNo, studentNamesByEnrollment)
+        : "Not found in student data";
+
       return {
         guild_id: guildId,
         user_id: user.user_id,
         username: registration?.username ?? user.username,
-        enrollment_no: registration?.enrollment_no ?? "Not registered",
+        discord_username: user.discord_username,
+        enrollment_no: enrollmentNo,
+        student_name: enrollmentNo === "Not registered" ? "-" : studentName,
+        match_status:
+          enrollmentNo === "Not registered" ? "Unregistered" : isMatched ? "Matched" : "Mismatched",
         registered_display: formatDateTime(registration?.registered_at ?? null),
         updated_display: formatDateTime(registration?.updated_at ?? null)
       };
     })
     .sort((left, right) => left.username.localeCompare(right.username));
+
+  const analyticsByUserId = new Map(users.map((user) => [user.userId, user]));
+  const mismatchedUsers: MismatchedUserRow[] = registrations
+    .filter((registration) => registration.match_status === "Mismatched")
+    .map((registration) => {
+      const analytics = analyticsByUserId.get(registration.user_id);
+
+      return {
+        userId: registration.user_id,
+        username: registration.username,
+        discordUsername: registration.discord_username,
+        enrollmentNo: registration.enrollment_no,
+        studentName: registration.student_name,
+        mismatchReason: "Enrollment number is registered, but no matching record exists in student data.",
+        registeredDisplay: registration.registered_display,
+        updatedDisplay: registration.updated_display,
+        totalRunsJoined: analytics?.totalRunsJoined ?? 0,
+        totalSessions: analytics?.totalSessions ?? 0,
+        totalDuration: analytics?.totalDuration ?? formatDuration(0)
+      };
+    });
 
   const sessions = sessionsForGuild.map((session) => ({
     ...session,
@@ -980,6 +941,8 @@ const buildUsersPageData = async (guildId: string) => {
     users,
     sessions,
     registrations,
+    mismatchedUsers,
+    matchedRegistrationCount: registrations.filter((registration) => registration.match_status === "Matched").length,
     totalJoinedUsers: joinedUserIds.size,
     totalRegisteredJoinedUsers: registeredJoinedUserCount,
     currentPage: "users",
@@ -988,6 +951,7 @@ const buildUsersPageData = async (guildId: string) => {
       guildId,
       runs: filterRunsByGuild(guildId),
       registrations,
+      mismatchedUsers,
       sessions: sessionsForGuild
     })
   };
@@ -1007,7 +971,8 @@ const buildUsersExportRows = async (guildId: string) => {
       serverUsername: member?.server_username ?? registration.username,
       discordUsername: member?.discord_username ?? registration.username,
       enrollmentNo: registration.enrollment_no,
-      status: registration.enrollment_no === "Not registered" ? "Unregistered" : "Registered",
+      studentName: registration.student_name,
+      status: registration.match_status,
       totalRunsJoined: analytics?.totalRunsJoined ?? 0,
       averagePercentage: analytics?.averagePercentage ?? "0.0%",
       totalDuration: analytics?.totalDuration ?? formatDuration(0),
@@ -1048,7 +1013,7 @@ const createWorkbookForUsers = async (guildId: string) => {
     sheet.addRow([
       row.serverUsername,
       row.discordUsername,
-      getStudentNameForEnrollment(row.enrollmentNo, studentNamesByEnrollment),
+      row.studentName === "-" ? getStudentNameForEnrollment(row.enrollmentNo, studentNamesByEnrollment) : row.studentName,
       getExportEnrollmentNo(row.enrollmentNo),
       row.status,
       row.totalRunsJoined,
@@ -1058,6 +1023,54 @@ const createWorkbookForUsers = async (guildId: string) => {
       row.firstSeenDisplay,
       row.lastSeenDisplay
     ]);
+  }
+
+  sheet.getRow(1).font = { bold: true };
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  autoFitWorksheetColumns(sheet);
+
+  return workbook;
+};
+
+const createWorkbookForMismatchedUsers = async (guildId: string) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "MUPC Attendance Bot";
+  workbook.created = new Date();
+
+  const pageData = await buildUsersPageData(guildId);
+  const guildName = getGuildName(guildId);
+  const sheet = workbook.addWorksheet(sanitizeWorksheetName(`${guildName} Mismatched`));
+
+  sheet.addRow([
+    "Server Username",
+    "Discord Username",
+    "Enrollment No",
+    "Student Data Match",
+    "Reason",
+    "Total Workshops Joined",
+    "Total Sessions",
+    "Total Duration (HH:MM:SS)",
+    "Registered At",
+    "Last Updated"
+  ]);
+
+  for (const row of pageData.mismatchedUsers) {
+    sheet.addRow([
+      row.username,
+      row.discordUsername,
+      row.enrollmentNo,
+      row.studentName,
+      row.mismatchReason,
+      row.totalRunsJoined,
+      row.totalSessions,
+      row.totalDuration,
+      row.registeredDisplay,
+      row.updatedDisplay
+    ]);
+  }
+
+  if (pageData.mismatchedUsers.length === 0) {
+    sheet.addRow(["No mismatched registrations were found for this server."]);
   }
 
   sheet.getRow(1).font = { bold: true };
@@ -1189,17 +1202,12 @@ app.get("/api/dashboard-snapshot", async (req, res) => {
   return res.status(400).json({ error: "Unknown dashboard page." });
 });
 
-const sendUsersWorkbook = async (guildId: string, res: Response) => {
-  const workbook = await createWorkbookForUsers(guildId);
-
+const sendWorkbook = async (filename: string, workbook: ExcelJS.Workbook, res: Response) => {
   res.setHeader(
     "Content-Type",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   );
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="${guildId}-user-attendance.xlsx"`
-  );
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
 
   await workbook.xlsx.write(res);
   res.end();
@@ -1211,7 +1219,7 @@ app.get("/servers/:guildId/users/export.csv", async (req, res) => {
     return;
   }
 
-  await sendUsersWorkbook(guildId, res);
+  await sendWorkbook(`${guildId}-user-attendance.xlsx`, await createWorkbookForUsers(guildId), res);
 });
 
 app.get("/servers/:guildId/users/export.xlsx", async (req, res) => {
@@ -1220,7 +1228,20 @@ app.get("/servers/:guildId/users/export.xlsx", async (req, res) => {
     return;
   }
 
-  await sendUsersWorkbook(guildId, res);
+  await sendWorkbook(`${guildId}-user-attendance.xlsx`, await createWorkbookForUsers(guildId), res);
+});
+
+app.get("/servers/:guildId/users/mismatched.xlsx", async (req, res) => {
+  const guildId = requireGuildContext(req, res);
+  if (!guildId) {
+    return;
+  }
+
+  await sendWorkbook(
+    `${guildId}-mismatched-registrations.xlsx`,
+    await createWorkbookForMismatchedUsers(guildId),
+    res
+  );
 });
 
 app.get("/servers/:guildId/runs/:id/export.xlsx", async (req, res) => {

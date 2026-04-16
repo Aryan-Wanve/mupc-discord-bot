@@ -281,6 +281,11 @@ const statements = {
     WHERE guild_id = @guildId
       AND user_id = @userId
   `),
+  deleteRegisteredUsersByGuildAndUserIds: db.prepare(`
+    DELETE FROM registered_users
+    WHERE guild_id = ?
+      AND user_id IN (SELECT value FROM json_each(?))
+  `),
   listOpenSessionsForActiveRuns: db.prepare(`
     SELECT sessions.*
     FROM tracking_sessions AS sessions
@@ -499,6 +504,14 @@ export const registeredUserRepository = {
   deleteByUserId(guildId: string, userId: string) {
     const result = statements.deleteRegisteredUserById.run({ guildId, userId });
     return result.changes > 0;
+  },
+  deleteManyByUserIds(guildId: string, userIds: string[]) {
+    if (userIds.length === 0) {
+      return 0;
+    }
+
+    const result = statements.deleteRegisteredUsersByGuildAndUserIds.run(guildId, JSON.stringify(userIds));
+    return result.changes;
   },
   upsert(input: { guildId: string; userId: string; username: string; enrollmentNo: string }) {
     statements.upsertRegisteredUser.run(input);

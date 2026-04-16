@@ -84,6 +84,11 @@ const renameCommand = new SlashCommandBuilder()
     subcommand
       .setName("registered")
       .setDescription("Rename eligible registered members to their student names.")
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("update")
+      .setDescription("Refresh registered member nicknames to the latest formatting.")
   );
 
 const showCommand = new SlashCommandBuilder()
@@ -368,7 +373,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Admin Commands",
                 value:
-                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/show mismatched`\nList members whose enrollment numbers do not match student data.\n\n`/show registered-role`\nAudit who is registered but missing the `registered` role.\n\n`/deregister member user:<user>`\nRemove one member's saved enrollment number.\n\n`/deregister mismatched`\nBulk-remove mismatched registrations and DM those members.\n\n`/rename registered`\nRename eligible registered members to their student names.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
+                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/show mismatched`\nList members whose enrollment numbers do not match student data.\n\n`/show registered-role`\nAudit who is registered but missing the `registered` role.\n\n`/deregister member user:<user>`\nRemove one member's saved enrollment number.\n\n`/deregister mismatched`\nBulk-remove mismatched registrations and DM those members.\n\n`/rename registered`\nRename eligible registered members to their student names.\n\n`/rename update`\nRefresh old registered nicknames to the latest formatting.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
               },
               {
                 name: "Recommended Workflow",
@@ -1195,6 +1200,153 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
   });
 }
 
+async function handleRenameUpdate(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId || !interaction.inCachedGuild()) {
+    throw new Error("This command must be used inside a server.");
+  }
+
+  const studentNamesByEnrollment = await loadStudentNameLookup();
+  const registrations = registeredUserRepository.listByGuild(interaction.guildId);
+  const memberMap = await getGuildMemberMap(interaction);
+  const botMember = await interaction.guild.members.fetchMe().catch(() => null);
+  const missingManageNicknames = !botMember?.permissions.has(PermissionFlagsBits.ManageNicknames);
+
+  let updatedCount = 0;
+  let skippedNotFormattingCount = 0;
+  let skippedMissingNameCount = 0;
+  let skippedUnmanageableCount = 0;
+  let failedUpdateCount = 0;
+  let alreadyCurrentCount = 0;
+  const examples: string[] = [];
+  const failureReasonCounts = new Map<string, number>();
+  const failureExamples: string[] = [];
+
+  const recordFailureReason = (reason: string) => {
+    failureReasonCounts.set(reason, (failureReasonCounts.get(reason) ?? 0) + 1);
+  };
+
+  for (const registration of registrations) {
+    const member = memberMap.get(registration.user_id);
+    if (!member) {
+      continue;
+    }
+
+    const resolvedStudentName = getStudentNameForEnrollment(
+      registration.enrollment_no,
+      studentNamesByEnrollment
+    );
+    if (resolvedStudentName === "-" || resolvedStudentName === "Data not available") {
+      skippedMissingNameCount += 1;
+      continue;
+    }
+
+    const targetName = formatStudentDisplayName(resolvedStudentName);
+    const currentName = member.nickname ?? member.user.globalName ?? member.user.username;
+
+    if (!needsRegisteredNameRefresh(currentName, targetName)) {
+      alreadyCurrentCount += 1;
+      continue;
+    }
+
+    if (!canRefreshLegacyRegisteredFormatting(currentName, targetName)) {
+      skippedNotFormattingCount += 1;
+      continue;
+    }
+
+    if (!member.manageable) {
+      skippedUnmanageableCount += 1;
+      continue;
+    }
+
+    const renameError = await member
+      .setNickname(targetName, "Refresh registered nickname formatting")
+      .then(() => null)
+      .catch((error) => error);
+    if (renameError) {
+      failedUpdateCount += 1;
+      const reason =
+        renameError instanceof DiscordAPIError
+          ? `${renameError.code}: ${renameError.message}`
+          : renameError instanceof Error
+            ? renameError.message
+            : "Unknown nickname update error";
+      recordFailureReason(reason);
+
+      if (failureExamples.length < 5) {
+        failureExamples.push(`${currentName} -> ${targetName}: ${reason}`);
+      }
+
+      continue;
+    }
+
+    updatedCount += 1;
+    if (examples.length < 5) {
+      examples.push(`${currentName} -> ${targetName} (${registration.enrollment_no})`);
+    }
+  }
+
+  await sendRegistryLogForGuild(interaction.guildId, {
+    title: "Registered Nicknames Updated",
+    description: "Registered members with outdated nickname formatting were refreshed to the latest student-name style.",
+    color: 0x67f0aa,
+    fields: [
+      { name: "Updated", value: String(updatedCount), inline: true },
+      { name: "Not Formatting Only", value: String(skippedNotFormattingCount), inline: true },
+      { name: "Missing Student Name", value: String(skippedMissingNameCount), inline: true },
+      { name: "Not Manageable", value: String(skippedUnmanageableCount), inline: true },
+      { name: "Update Failed", value: String(failedUpdateCount), inline: true },
+      { name: "Already Current", value: String(alreadyCurrentCount), inline: true },
+      {
+        name: "Bot Permission Check",
+        value: missingManageNicknames ? "Missing `Manage Nicknames` permission" : "Manage Nicknames is present",
+        inline: false
+      },
+      {
+        name: "Failure Reasons",
+        value:
+          failureReasonCounts.size > 0
+            ? [...failureReasonCounts.entries()]
+                .map(([reason, count]) => `${count}x ${reason}`)
+                .join("\n")
+            : "No update failures."
+      },
+      {
+        name: "Updated By",
+        value: `${await getInteractionDisplayName(interaction)}\n<@${interaction.user.id}>`,
+        inline: true
+      },
+      {
+        name: "Examples",
+        value: examples.length > 0 ? examples.join("\n") : "No nickname formatting changes were needed."
+      },
+      {
+        name: "Failure Examples",
+        value: failureExamples.length > 0 ? failureExamples.join("\n") : "No per-member update failures."
+      }
+    ]
+  });
+
+  await interaction.editReply({
+    embeds: [
+      buildEmbed({
+        title: updatedCount > 0 ? "Registered Nicknames Updated" : "No Nickname Updates Needed",
+        description: missingManageNicknames
+          ? "The bot is missing the `Manage Nicknames` permission, so nickname updates will fail until that is fixed."
+          : "This command only refreshes outdated nickname formatting for already-registered names.",
+        color: updatedCount > 0 ? 0x67f0aa : 0xffd85a,
+        fields: [
+          { name: "Updated", value: String(updatedCount), inline: true },
+          { name: "Not Formatting Only", value: String(skippedNotFormattingCount), inline: true },
+          { name: "Missing Student Name", value: String(skippedMissingNameCount), inline: true },
+          { name: "Not Manageable", value: String(skippedUnmanageableCount), inline: true },
+          { name: "Update Failed", value: String(failedUpdateCount), inline: true },
+          { name: "Already Current", value: String(alreadyCurrentCount), inline: true }
+        ]
+      })
+    ]
+  });
+}
+
 export async function registerSlashCommands(guildIds: string[]) {
   if (guildIds.length === 0) {
     return;
@@ -1259,6 +1411,11 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       }
 
       const subcommand = interaction.options.getSubcommand(true);
+      if (subcommand === "update") {
+        await handleRenameUpdate(interaction);
+        return;
+      }
+
       if (subcommand !== "registered") {
         return;
       }

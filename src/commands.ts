@@ -583,6 +583,9 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
   });
   const studentNamesByEnrollment = await loadStudentNameLookup();
   const matched = isEnrollmentMatched(enrollmentNo, studentNamesByEnrollment);
+  const matchedStudentName = matched
+    ? getStudentNameForEnrollment(enrollmentNo, studentNamesByEnrollment)
+    : null;
 
   await sendRegistryLogForGuild(interaction.guildId, {
     title: "Member Registered",
@@ -603,7 +606,12 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
           : `Your enrollment number is saved as **${registered?.enrollment_no ?? enrollmentNo}**, but it does not match the current student data yet. Please double-check the format.`,
         color: matched ? 0x67f0aa : 0xffd85a,
         fields: matched
-          ? []
+          ? [
+              {
+                name: "Matched Student Name",
+                value: `According to the student data, your name is **${matchedStudentName}**.`
+              }
+            ]
           : [
               {
                 name: "Correct Format Example",

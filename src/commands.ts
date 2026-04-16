@@ -94,6 +94,11 @@ const showCommand = new SlashCommandBuilder()
     subcommand
       .setName("mismatched")
       .setDescription("Show members whose registered enrollment numbers do not match student data.")
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("registered-role")
+      .setDescription("Show registered members missing the registered role and likely reasons.")
   );
 
 const trackingCommand = new SlashCommandBuilder()
@@ -287,6 +292,7 @@ const getGuildMemberMap = async (interaction: ChatInputCommandInteraction) => {
 };
 
 const memberRoleName = "member";
+const registeredRoleName = "registered";
 
 const getNonEveryoneRoleNames = (member: GuildMember) =>
   member.roles.cache
@@ -334,7 +340,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction) {
               {
                 name: "Admin Commands",
                 value:
-                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/show mismatched`\nList members whose enrollment numbers do not match student data.\n\n`/deregister member user:<user>`\nRemove one member's saved enrollment number.\n\n`/deregister mismatched`\nBulk-remove mismatched registrations and DM those members.\n\n`/rename registered`\nRename eligible registered members to their student names.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
+                  "`/tracking start [title]`\nStart immediately.\n\n`/tracking stop`\nStop the active run.\n\n`/tracking schedule title:<name> start:<HH:mm> end:<HH:mm>`\nSchedule both start and stop.\n\n`/tracking schedule-start title:<name> start:<HH:mm>`\nSchedule only the start and stop it manually later.\n\n`/tracking cancel runid:<id>`\nCancel a scheduled run.\n\n`/tracking status`\nShow active and recent runs.\n\n`/show mismatched`\nList members whose enrollment numbers do not match student data.\n\n`/show registered-role`\nAudit who is registered but missing the `registered` role.\n\n`/deregister member user:<user>`\nRemove one member's saved enrollment number.\n\n`/deregister mismatched`\nBulk-remove mismatched registrations and DM those members.\n\n`/rename registered`\nRename eligible registered members to their student names.\n\n`/help`\nShow this guide.\n\n`/ping`\nCheck whether the bot is online."
               },
               {
                 name: "Recommended Workflow",
@@ -858,6 +864,149 @@ async function handleShowMismatched(interaction: ChatInputCommandInteraction) {
   });
 }
 
+async function handleShowRegisteredRole(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId || !interaction.inCachedGuild()) {
+    throw new Error("This command must be used inside a server.");
+  }
+
+  await interaction.guild.roles.fetch().catch(() => undefined);
+  const registrations = registeredUserRepository.listByGuild(interaction.guildId);
+  const memberMap = await getGuildMemberMap(interaction);
+  const botMember = await interaction.guild.members.fetchMe().catch(() => null);
+  const registeredRole = interaction.guild.roles.cache.find(
+    (role) =>
+      role.id !== interaction.guild.roles.everyone.id &&
+      role.name.toLowerCase() === registeredRoleName
+  );
+  const hasManageRoles = Boolean(botMember?.permissions.has(PermissionFlagsBits.ManageRoles));
+  const botHighestRolePosition = botMember?.roles.highest.position ?? -1;
+  const canManageRegisteredRole = Boolean(
+    registeredRole && botMember && registeredRole.position < botHighestRolePosition
+  );
+
+  const issues: Array<{
+    userId: string;
+    username: string;
+    enrollmentNo: string;
+    reason: string;
+    roleSummary: string;
+  }> = [];
+  let assignedCount = 0;
+  let missingMemberCount = 0;
+
+  for (const registration of registrations) {
+    const member = memberMap.get(registration.user_id);
+    if (!member) {
+      missingMemberCount += 1;
+      issues.push({
+        userId: registration.user_id,
+        username: registration.username,
+        enrollmentNo: registration.enrollment_no,
+        reason: "The user is registered in the database but is no longer in this server.",
+        roleSummary: "Not in server"
+      });
+      continue;
+    }
+
+    if (registeredRole && member.roles.cache.has(registeredRole.id)) {
+      assignedCount += 1;
+      continue;
+    }
+
+    const visibleRoles = member.roles.cache
+      .filter((role) => role.id !== member.guild.roles.everyone.id)
+      .map((role) => role.name)
+      .slice(0, 5);
+    const roleSummary = visibleRoles.length > 0 ? visibleRoles.join(", ") : "No extra roles";
+
+    let reason = "Role assignment likely failed earlier; the bot should be able to sync it now.";
+    if (!registeredRole) {
+      reason = "The `registered` role does not exist in this server.";
+    } else if (!botMember) {
+      reason = "The bot member could not be fetched from this server.";
+    } else if (!hasManageRoles) {
+      reason = "The bot is missing the `Manage Roles` permission.";
+    } else if (!canManageRegisteredRole) {
+      reason =
+        "The `registered` role is above or equal to the bot's highest role, so the bot cannot assign it.";
+    } else if (member.id === interaction.guild.ownerId) {
+      reason = "Discord does not let the bot manage the server owner's roles.";
+    } else if (member.roles.highest.position >= botHighestRolePosition) {
+      reason =
+        "This member's highest role is above or equal to the bot's highest role, so the bot cannot manage their roles.";
+    }
+
+    issues.push({
+      userId: registration.user_id,
+      username: registration.username,
+      enrollmentNo: registration.enrollment_no,
+      reason,
+      roleSummary
+    });
+  }
+
+  const summaryFields = [
+    { name: "Registered Users", value: String(registrations.length), inline: true },
+    { name: "Role Present", value: String(assignedCount), inline: true },
+    { name: "Missing Role", value: String(issues.length - missingMemberCount), inline: true },
+    { name: "Not In Server", value: String(missingMemberCount), inline: true },
+    {
+      name: "Registered Role",
+      value: registeredRole ? `<@&${registeredRole.id}>` : "Missing",
+      inline: true
+    },
+    {
+      name: "Bot Role Check",
+      value: hasManageRoles
+        ? canManageRegisteredRole || !registeredRole
+          ? "Manage Roles looks OK"
+          : "Role hierarchy blocks assignment"
+        : "Missing `Manage Roles`",
+      inline: true
+    }
+  ];
+
+  if (issues.length === 0) {
+    await interaction.editReply({
+      embeds: [
+        buildEmbed({
+          title: "Registered Role Audit",
+          description: "Every registered member currently has the `registered` role.",
+          color: 0x67f0aa,
+          fields: summaryFields
+        })
+      ]
+    });
+    return;
+  }
+
+  const chunks: typeof issues[] = [];
+  for (let index = 0; index < issues.length; index += 5) {
+    chunks.push(issues.slice(index, index + 5));
+  }
+
+  await interaction.editReply({
+    embeds: chunks.slice(0, 4).map((chunk, chunkIndex) =>
+      buildEmbed({
+        title: chunkIndex === 0 ? "Registered Role Audit" : `Registered Role Audit (${chunkIndex + 1})`,
+        description:
+          chunkIndex === 0
+            ? "These registered users are missing the `registered` role or are no longer in the server."
+            : undefined,
+        color: 0xffd85a,
+        fields: [
+          ...(chunkIndex === 0 ? summaryFields : []),
+          ...chunk.map((issue) => ({
+            name: `${issue.username} (${issue.enrollmentNo})`,
+            value: `${issue.reason}\nRoles: ${issue.roleSummary}\n<@${issue.userId}>`,
+            inline: false
+          }))
+        ]
+      })
+    )
+  });
+}
+
 async function handleRenameRegistered(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId || !interaction.inCachedGuild()) {
     throw new Error("This command must be used inside a server.");
@@ -1089,6 +1238,12 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
     if (interaction.commandName === "show") {
       if (!(await ensureStaffAccess(interaction))) {
+        return;
+      }
+
+      const subcommand = interaction.options.getSubcommand(true);
+      if (subcommand === "registered-role") {
+        await handleShowRegisteredRole(interaction);
         return;
       }
 

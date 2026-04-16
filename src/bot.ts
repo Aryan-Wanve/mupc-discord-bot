@@ -11,6 +11,7 @@ import {
   PermissionFlagsBits,
   Partials,
   TextChannel,
+  User,
   VoiceBasedChannel,
   VoiceState
 } from "discord.js";
@@ -231,6 +232,24 @@ export async function sendRegistryLogForGuild(
   if (channel && channel.isTextBased()) {
     await channel.send({ embeds: [buildLogEmbed(input)] }).catch(() => undefined);
   }
+}
+
+export async function sendDirectMessage(
+  user: User,
+  input: {
+    title: string;
+    description?: string;
+    color?: number;
+    fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  }
+) {
+  const channel = await user.createDM().catch(() => null);
+  if (!channel) {
+    return false;
+  }
+
+  const sent = await channel.send({ embeds: [buildLogEmbed(input)] }).catch(() => null);
+  return Boolean(sent);
 }
 
 function getTrackableChannels(guild: Guild) {

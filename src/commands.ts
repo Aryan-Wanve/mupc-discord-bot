@@ -860,6 +860,8 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
   const studentNamesByEnrollment = await loadStudentNameLookup();
   const registrations = registeredUserRepository.listByGuild(interaction.guildId);
   const memberMap = await getGuildMemberMap(interaction);
+  const botMember = await interaction.guild.members.fetchMe().catch(() => null);
+  const missingManageNicknames = !botMember?.permissions.has(PermissionFlagsBits.ManageNicknames);
 
   let renamedCount = 0;
   let skippedRoleCount = 0;
@@ -868,6 +870,12 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
   let failedRenameCount = 0;
   let unchangedCount = 0;
   const examples: string[] = [];
+  const failureReasonCounts = new Map<string, number>();
+  const failureExamples: string[] = [];
+
+  const recordFailureReason = (reason: string) => {
+    failureReasonCounts.set(reason, (failureReasonCounts.get(reason) ?? 0) + 1);
+  };
 
   for (const registration of registrations) {
     const member = memberMap.get(registration.user_id);
@@ -897,12 +905,24 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
       continue;
     }
 
-    const renamed = await member
+    const renameError = await member
       .setNickname(targetName, "Renamed from registered enrollment number")
-      .then(() => true)
-      .catch(() => false);
-    if (!renamed) {
+      .then(() => null)
+      .catch((error) => error);
+    if (renameError) {
       failedRenameCount += 1;
+      const reason =
+        renameError instanceof DiscordAPIError
+          ? `${renameError.code}: ${renameError.message}`
+          : renameError instanceof Error
+            ? renameError.message
+            : "Unknown nickname update error";
+      recordFailureReason(reason);
+
+      if (failureExamples.length < 5) {
+        failureExamples.push(`${currentName} -> ${targetName}: ${reason}`);
+      }
+
       continue;
     }
 
@@ -925,6 +945,20 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
       { name: "Rename Failed", value: String(failedRenameCount), inline: true },
       { name: "Already Matching", value: String(unchangedCount), inline: true },
       {
+        name: "Bot Permission Check",
+        value: missingManageNicknames ? "Missing `Manage Nicknames` permission" : "Manage Nicknames is present",
+        inline: false
+      },
+      {
+        name: "Failure Reasons",
+        value:
+          failureReasonCounts.size > 0
+            ? [...failureReasonCounts.entries()]
+                .map(([reason, count]) => `${count}x ${reason}`)
+                .join("\n")
+            : "No rename failures."
+      },
+      {
         name: "Renamed By",
         value: `${await getInteractionDisplayName(interaction)}\n<@${interaction.user.id}>`,
         inline: true
@@ -932,6 +966,10 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
       {
         name: "Examples",
         value: examples.length > 0 ? examples.join("\n") : "No nickname changes were needed."
+      },
+      {
+        name: "Failure Examples",
+        value: failureExamples.length > 0 ? failureExamples.join("\n") : "No per-member rename failures."
       }
     ]
   });
@@ -941,7 +979,9 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
       buildEmbed({
         title: renamedCount > 0 ? "Registered Members Renamed" : "No Members Renamed",
         description:
-          "Only members with no extra roles or only the `member` role were considered for renaming.",
+          missingManageNicknames
+            ? "The bot is missing the `Manage Nicknames` permission, so nickname updates will fail until that is fixed."
+            : "Only members with no extra roles or only the `member` role were considered for renaming.",
         color: renamedCount > 0 ? 0x67f0aa : 0xffd85a,
         fields: [
           { name: "Renamed", value: String(renamedCount), inline: true },
@@ -949,7 +989,15 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
           { name: "Missing Student Name", value: String(skippedMissingNameCount), inline: true },
           { name: "Not Manageable", value: String(skippedUnmanageableCount), inline: true },
           { name: "Rename Failed", value: String(failedRenameCount), inline: true },
-          { name: "Already Matching", value: String(unchangedCount), inline: true }
+          { name: "Already Matching", value: String(unchangedCount), inline: true },
+          {
+            name: "Top Failure Reason",
+            value:
+              failureReasonCounts.size > 0
+                ? [...failureReasonCounts.entries()]
+                    .sort((left, right) => right[1] - left[1])[0][0]
+                : "None"
+          }
         ]
       })
     ]

@@ -321,6 +321,17 @@ const needsRegisteredNameRefresh = (currentName: string, targetName: string) => 
   return formatStudentDisplayName(normalizedCurrent) !== normalizedTarget;
 };
 
+const canRefreshLegacyRegisteredFormatting = (currentName: string, targetName: string) => {
+  const normalizedCurrent = normalizeNicknameValue(currentName);
+  const normalizedTarget = normalizeNicknameValue(targetName);
+
+  return (
+    normalizedCurrent.length > 0 &&
+    normalizedCurrent.toLowerCase() === normalizedTarget.toLowerCase() &&
+    normalizedCurrent !== normalizedTarget
+  );
+};
+
 const sendMismatchDm = async (
   member: GuildMember | null,
   enrollmentNo: string
@@ -1055,11 +1066,6 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
       continue;
     }
 
-    if (!isEligibleForRegisteredRename(member)) {
-      skippedRoleCount += 1;
-      continue;
-    }
-
     const resolvedStudentName = getStudentNameForEnrollment(
       registration.enrollment_no,
       studentNamesByEnrollment
@@ -1070,13 +1076,21 @@ async function handleRenameRegistered(interaction: ChatInputCommandInteraction) 
     }
 
     const targetName = formatStudentDisplayName(resolvedStudentName);
+    const currentName = member.nickname ?? member.user.globalName ?? member.user.username;
+    const eligibleForRename = isEligibleForRegisteredRename(member);
+    const canFixLegacyFormatting =
+      !eligibleForRename && canRefreshLegacyRegisteredFormatting(currentName, targetName);
+
+    if (!eligibleForRename && !canFixLegacyFormatting) {
+      skippedRoleCount += 1;
+      continue;
+    }
 
     if (!member.manageable) {
       skippedUnmanageableCount += 1;
       continue;
     }
 
-    const currentName = member.nickname ?? member.user.globalName ?? member.user.username;
     if (!needsRegisteredNameRefresh(currentName, targetName)) {
       unchangedCount += 1;
       continue;

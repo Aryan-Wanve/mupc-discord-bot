@@ -13,8 +13,10 @@ import {
 import { config } from "./config";
 import { registeredUserRepository } from "./db";
 import {
+  addRegisteredRoleForMember,
   cancelScheduledTrackingForGuild,
   getTrackingStatusForGuild,
+  removeRegisteredRoleForMember,
   scheduleTrackingStartOnlyForGuild,
   scheduleTrackingForGuild,
   sendDirectMessage,
@@ -616,6 +618,16 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
   const matchedStudentName = matched
     ? getStudentNameForEnrollment(enrollmentNo, studentNamesByEnrollment)
     : null;
+  const roleAssigned = await addRegisteredRoleForMember(interaction.guildId, userId);
+  const roleNoticeField = roleAssigned
+    ? []
+    : [
+        {
+          name: "Role Notice",
+          value:
+            "Your registration was saved, but I could not assign the `registered` role. Please check the bot's Manage Roles permission and role hierarchy."
+        }
+      ];
 
   await sendRegistryLogForGuild(interaction.guildId, {
     title: "Member Registered",
@@ -623,7 +635,8 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
     color: 0x67f0aa,
     fields: [
       { name: "User", value: `${username}\n<@${userId}>`, inline: true },
-      { name: "Enrollment No", value: registered?.enrollment_no ?? enrollmentNo, inline: true }
+      { name: "Enrollment No", value: registered?.enrollment_no ?? enrollmentNo, inline: true },
+      { name: "Registered Role", value: roleAssigned ? "Assigned" : "Could not assign", inline: true }
     ]
   });
 
@@ -640,13 +653,15 @@ async function handleRegister(interaction: ChatInputCommandInteraction) {
               {
                 name: "Matched Student Name",
                 value: `According to the student data, your name is **${matchedStudentName}**.`
-              }
+              },
+              ...roleNoticeField
             ]
           : [
               {
                 name: "Correct Format Example",
                 value: `/register enrollmentno:${exampleEnrollmentNo}`
-              }
+              },
+              ...roleNoticeField
             ]
       })
     ]
@@ -675,6 +690,7 @@ async function handleDeregisterMember(interaction: ChatInputCommandInteraction) 
   }
 
   registeredUserRepository.deleteByUserId(interaction.guildId, member.id);
+  const removedRole = await removeRegisteredRoleForMember(interaction.guildId, member.id);
 
   await sendRegistryLogForGuild(interaction.guildId, {
     title: "Member Deregistered",
@@ -683,6 +699,7 @@ async function handleDeregisterMember(interaction: ChatInputCommandInteraction) 
     fields: [
       { name: "User", value: `${existing.username}\n<@${member.id}>`, inline: true },
       { name: "Enrollment No", value: existing.enrollment_no, inline: true },
+      { name: "Registered Role", value: removedRole ? "Removed" : "Could not remove", inline: true },
       {
         name: "Removed By",
         value: `${await getInteractionDisplayName(interaction)}\n<@${interaction.user.id}>`,
@@ -729,6 +746,8 @@ async function handleDeregisterMismatched(interaction: ChatInputCommandInteracti
 
   let dmSentCount = 0;
   let dmFailedCount = 0;
+  let roleRemovedCount = 0;
+  let roleRemoveFailedCount = 0;
 
   for (const entry of mismatched) {
     const member = memberMap.get(entry.user_id) ?? null;
@@ -737,6 +756,13 @@ async function handleDeregisterMismatched(interaction: ChatInputCommandInteracti
       dmSentCount += 1;
     } else {
       dmFailedCount += 1;
+    }
+
+    const removedRole = await removeRegisteredRoleForMember(interaction.guildId, entry.user_id);
+    if (removedRole) {
+      roleRemovedCount += 1;
+    } else {
+      roleRemoveFailedCount += 1;
     }
   }
 
@@ -748,6 +774,8 @@ async function handleDeregisterMismatched(interaction: ChatInputCommandInteracti
       { name: "Removed", value: String(removedCount), inline: true },
       { name: "DM Sent", value: String(dmSentCount), inline: true },
       { name: "DM Failed", value: String(dmFailedCount), inline: true },
+      { name: "Role Removed", value: String(roleRemovedCount), inline: true },
+      { name: "Role Remove Failed", value: String(roleRemoveFailedCount), inline: true },
       {
         name: "Examples",
         value: mismatched
@@ -769,6 +797,8 @@ async function handleDeregisterMismatched(interaction: ChatInputCommandInteracti
           { name: "Removed", value: String(removedCount), inline: true },
           { name: "DM Sent", value: String(dmSentCount), inline: true },
           { name: "DM Failed", value: String(dmFailedCount), inline: true },
+          { name: "Role Removed", value: String(roleRemovedCount), inline: true },
+          { name: "Role Remove Failed", value: String(roleRemoveFailedCount), inline: true },
           {
             name: "Re-register Example",
             value: `/register enrollmentno:${exampleEnrollmentNo}`

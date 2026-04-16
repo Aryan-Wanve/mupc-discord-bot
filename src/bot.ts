@@ -17,7 +17,7 @@ import {
 } from "discord.js";
 import { config } from "./config";
 import { AttendanceTracker } from "./attendanceTracker";
-import { trackingRunRepository } from "./db";
+import { registeredUserRepository, trackingRunRepository } from "./db";
 import { handleSlashCommand, registerSlashCommands } from "./commands";
 import { formatScheduleWindow, nowIso } from "./utils";
 
@@ -25,6 +25,8 @@ const tracker = new AttendanceTracker();
 const schedulerIntervalMs = 15_000;
 const logChannelName = "attendance-logs";
 const registryLogChannelName = "user-registry-logs";
+const registeredRoleName = "registered";
+const registeredRoleColor = 0x57f287;
 
 export const discordClient = new Client({
   intents: [
@@ -178,6 +180,152 @@ async function ensureRegistryLogChannel(guild: Guild) {
     );
     return null;
   }
+}
+
+async function ensureRegisteredRole(guild: Guild) {
+  try {
+    await guild.roles.fetch();
+    const existing = guild.roles.cache.find(
+      (role) =>
+        role.id !== guild.roles.everyone.id &&
+        role.name.toLowerCase() === registeredRoleName
+    );
+
+    if (existing) {
+      if (existing.color !== registeredRoleColor) {
+        await existing.edit({
+          color: registeredRoleColor,
+          reason: "Keep the registered role color consistent for MUPC attendance"
+        });
+      }
+
+      return existing;
+    }
+
+    return await guild.roles.create({
+      name: registeredRoleName,
+      color: registeredRoleColor,
+      mentionable: false,
+      hoist: false,
+      reason: "Create the registered role for MUPC attendance registrations"
+    });
+  } catch (error) {
+    console.warn(
+      `Could not ensure ${registeredRoleName} role in guild ${guild.id}. ` +
+        `${error instanceof Error ? error.message : "Unknown error"}`
+    );
+    return null;
+  }
+}
+
+export async function addRegisteredRoleForMember(guildId: string, userId: string) {
+  const guild = await discordClient.guilds.fetch(guildId).catch(() => null);
+  if (!guild) {
+    return false;
+  }
+
+  const role = await ensureRegisteredRole(guild);
+  if (!role) {
+    return false;
+  }
+
+  const member = await guild.members.fetch(userId).catch(() => null);
+  if (!member) {
+    return false;
+  }
+
+  if (member.roles.cache.has(role.id)) {
+    return true;
+  }
+
+  try {
+    await member.roles.add(role, "User registered for MUPC attendance");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function removeRegisteredRoleForMember(guildId: string, userId: string) {
+  const guild = await discordClient.guilds.fetch(guildId).catch(() => null);
+  if (!guild) {
+    return false;
+  }
+
+  await guild.roles.fetch().catch(() => undefined);
+  const role = guild.roles.cache.find(
+    (existingRole) =>
+      existingRole.id !== guild.roles.everyone.id &&
+      existingRole.name.toLowerCase() === registeredRoleName
+  );
+  if (!role) {
+    return true;
+  }
+
+  const member = await guild.members.fetch(userId).catch(() => null);
+  if (!member) {
+    return false;
+  }
+
+  if (!member.roles.cache.has(role.id)) {
+    return true;
+  }
+
+  try {
+    await member.roles.remove(role, "User deregistered from MUPC attendance");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function syncRegisteredRoleForGuild(guildId: string) {
+  const guild = await discordClient.guilds.fetch(guildId).catch(() => null);
+  if (!guild) {
+    return { addedCount: 0, failedCount: 0, skippedCount: 0 };
+  }
+
+  const registrations = registeredUserRepository.listByGuild(guild.id);
+  if (registrations.length === 0) {
+    return { addedCount: 0, failedCount: 0, skippedCount: 0 };
+  }
+
+  const role = await ensureRegisteredRole(guild);
+  if (!role) {
+    return { addedCount: 0, failedCount: registrations.length, skippedCount: 0 };
+  }
+
+  const memberMap = await guild.members.fetch().catch(() => null);
+
+  let addedCount = 0;
+  let failedCount = 0;
+  let skippedCount = 0;
+
+  for (const registration of registrations) {
+    const member = memberMap?.get(registration.user_id) ?? null;
+    if (!member) {
+      failedCount += 1;
+      continue;
+    }
+
+    if (member.roles.cache.has(role.id)) {
+      skippedCount += 1;
+      continue;
+    }
+
+    const added = await member.roles
+      .add(role, "Backfill registered role for existing MUPC registration")
+      .then(() => true)
+      .catch(() => false);
+
+    if (added) {
+      addedCount += 1;
+    } else {
+      failedCount += 1;
+    }
+  }
+
+  return { addedCount, failedCount, skippedCount };
 }
 
 function buildLogEmbed(input: {
@@ -402,6 +550,10 @@ discordClient.once("clientReady", async () => {
     await logGuildDiagnostics(guild);
     await ensureLogChannel(guild);
     await ensureRegistryLogChannel(guild);
+    const registeredRoleSync = await syncRegisteredRoleForGuild(guild.id);
+    console.log(
+      `[Guild Registered Role] ${guild.name} (${guild.id}) | added=${registeredRoleSync.addedCount} | skipped=${registeredRoleSync.skippedCount} | failed=${registeredRoleSync.failedCount}`
+    );
   }
 
   for (const run of trackingRunRepository.list().filter((item) => item.is_active === 1)) {
@@ -426,6 +578,7 @@ discordClient.on("guildCreate", async (guild) => {
   await logGuildDiagnostics(guild);
   await ensureLogChannel(guild);
   await ensureRegistryLogChannel(guild);
+  await syncRegisteredRoleForGuild(guild.id);
   await registerSlashCommands([guild.id]);
 });
 

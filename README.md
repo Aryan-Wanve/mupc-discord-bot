@@ -134,7 +134,21 @@ SESSION_SECRET=change-me
 DASHBOARD_USERNAME=admin
 DASHBOARD_PASSWORD=change-me
 DATABASE_PATH=./data/attendance.sqlite
+DATABASE_BACKUP_PATH=
+DATABASE_BACKUP_DEBOUNCE_MS=1500
 ```
+
+### Personal drive database backup
+
+`DATABASE_PATH` is the live SQLite database used by the bot. If you also set `DATABASE_BACKUP_PATH`, the bot keeps a second SQLite backup at that path.
+
+Example for a mounted Google Drive or OneDrive folder:
+
+```env
+DATABASE_BACKUP_PATH=G:\My Drive\mupc-bot\attendance.sqlite
+```
+
+On startup, if the live database at `DATABASE_PATH` does not exist but the backup file does, the bot restores the live database from the backup. After database writes, it refreshes the backup after `DATABASE_BACKUP_DEBOUNCE_MS` milliseconds. This lets you migrate the bot to another server by carrying the drive-mounted backup with you.
 
 ## Local development
 

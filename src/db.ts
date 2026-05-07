@@ -11,6 +11,41 @@ import {
   TrackingSessionRow
 } from "./types";
 
+const pathsPointToSameFile = (first: string, second: string) =>
+  path.resolve(first).toLowerCase() === path.resolve(second).toLowerCase();
+
+const stagedRestorePath = `${config.databasePath}.restore`;
+
+const applyStagedDatabaseRestoreIfNeeded = () => {
+  if (!fs.existsSync(stagedRestorePath)) {
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(config.databasePath), { recursive: true });
+  if (fs.existsSync(config.databasePath)) {
+    fs.copyFileSync(config.databasePath, `${config.databasePath}.before-restore`);
+  }
+  fs.copyFileSync(stagedRestorePath, config.databasePath);
+  fs.unlinkSync(stagedRestorePath);
+  console.log(`Restored SQLite database from staged upload: ${stagedRestorePath}`);
+};
+
+const restoreDatabaseFromBackupIfNeeded = () => {
+  if (!config.databaseBackupPath || pathsPointToSameFile(config.databasePath, config.databaseBackupPath)) {
+    return;
+  }
+
+  if (fs.existsSync(config.databasePath) || !fs.existsSync(config.databaseBackupPath)) {
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(config.databasePath), { recursive: true });
+  fs.copyFileSync(config.databaseBackupPath, config.databasePath);
+  console.log(`Restored SQLite database from backup: ${config.databaseBackupPath}`);
+};
+
+applyStagedDatabaseRestoreIfNeeded();
+restoreDatabaseFromBackupIfNeeded();
 fs.mkdirSync(path.dirname(config.databasePath), { recursive: true });
 
 export const db = new Database(config.databasePath);
@@ -19,6 +54,96 @@ export const db = new Database(config.databasePath);
 // This app runs as a single process, so a simpler journal mode is safer there.
 const isRailwayVolumePath = config.databasePath.includes(`${path.sep}app${path.sep}data${path.sep}`);
 db.pragma(`journal_mode = ${isRailwayVolumePath ? "DELETE" : "WAL"}`);
+
+let backupTimer: NodeJS.Timeout | null = null;
+let backupInProgress: Promise<void> | null = null;
+
+const databaseBackupEnabled = Boolean(
+  config.databaseBackupPath && !pathsPointToSameFile(config.databasePath, config.databaseBackupPath)
+);
+
+export const flushDatabaseBackup = async (reason = "manual") => {
+  if (!databaseBackupEnabled || !config.databaseBackupPath) {
+    return;
+  }
+
+  if (backupTimer) {
+    clearTimeout(backupTimer);
+    backupTimer = null;
+  }
+
+  if (backupInProgress) {
+    await backupInProgress;
+    return;
+  }
+
+  const backupPath = config.databaseBackupPath;
+  const temporaryBackupPath = `${backupPath}.tmp`;
+  fs.mkdirSync(path.dirname(backupPath), { recursive: true });
+  if (fs.existsSync(temporaryBackupPath)) {
+    fs.unlinkSync(temporaryBackupPath);
+  }
+
+  backupInProgress = db
+    .backup(temporaryBackupPath)
+    .then(() => {
+      fs.copyFileSync(temporaryBackupPath, backupPath);
+      fs.unlinkSync(temporaryBackupPath);
+      console.log(`SQLite database backup updated (${reason}): ${backupPath}`);
+    })
+    .catch((error) => {
+      console.error(`Failed to update SQLite database backup (${reason}):`, error);
+    })
+    .finally(() => {
+      backupInProgress = null;
+    });
+
+  await backupInProgress;
+};
+
+export const createDatabaseSnapshot = async (destinationPath: string) => {
+  await flushDatabaseBackup("download");
+  fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+  if (fs.existsSync(destinationPath)) {
+    fs.unlinkSync(destinationPath);
+  }
+  await db.backup(destinationPath);
+};
+
+export const stageDatabaseRestore = async (sourcePath: string) => {
+  await flushDatabaseBackup("pre-restore");
+  fs.mkdirSync(path.dirname(stagedRestorePath), { recursive: true });
+  fs.copyFileSync(sourcePath, stagedRestorePath);
+  if (config.databaseBackupPath && !pathsPointToSameFile(config.databasePath, config.databaseBackupPath)) {
+    fs.mkdirSync(path.dirname(config.databaseBackupPath), { recursive: true });
+    fs.copyFileSync(sourcePath, config.databaseBackupPath);
+  }
+};
+
+const scheduleDatabaseBackup = (reason = "write") => {
+  if (!databaseBackupEnabled) {
+    return;
+  }
+
+  if (backupTimer) {
+    clearTimeout(backupTimer);
+  }
+
+  const delay = Math.max(250, config.databaseBackupDebounceMs);
+  backupTimer = setTimeout(() => {
+    void flushDatabaseBackup(reason);
+  }, delay);
+  backupTimer.unref?.();
+};
+
+const installDatabaseBackupSignalHandlers = () => {
+  const shutdown = (signal: NodeJS.Signals) => {
+    void flushDatabaseBackup(signal).finally(() => process.exit(signal === "SIGINT" ? 0 : 1));
+  };
+
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+};
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS tracking_runs (
@@ -384,6 +509,7 @@ export const trackingRunRepository = {
       status: "active"
     });
 
+    scheduleDatabaseBackup("tracking run created");
     return this.findById(Number(result.lastInsertRowid));
   },
   createScheduled(input: {
@@ -403,6 +529,7 @@ export const trackingRunRepository = {
       status: "scheduled"
     });
 
+    scheduleDatabaseBackup("tracking run scheduled");
     return this.findById(Number(result.lastInsertRowid));
   },
   list(): TrackingRunRow[] {
@@ -425,12 +552,17 @@ export const trackingRunRepository = {
   },
   markActive(id: number, startedAt: string) {
     statements.activateRun.run({ id, startedAt });
+    scheduleDatabaseBackup("tracking run started");
   },
   markCompleted(id: number, endedAt: string, status = "completed") {
     statements.completeRun.run({ id, endedAt, status });
+    scheduleDatabaseBackup("tracking run completed");
   },
   deleteScheduled(id: number, guildId: string) {
     const result = statements.deleteScheduledRunByIdAndGuild.run({ id, guildId });
+    if (result.changes > 0) {
+      scheduleDatabaseBackup("scheduled tracking run deleted");
+    }
     return result.changes > 0;
   }
 };
@@ -446,12 +578,15 @@ export const trackingSessionRepository = {
     joinedAt: string;
   }) {
     statements.createSession.run(input);
+    scheduleDatabaseBackup("tracking session created");
   },
   close(input: { trackingRunId: number; userId: string; leftAt: string }) {
     statements.closeSession.run(input);
+    scheduleDatabaseBackup("tracking session closed");
   },
   closeAllForRun(input: { trackingRunId: number; leftAt: string }) {
     statements.closeAllSessionsForRun.run(input);
+    scheduleDatabaseBackup("tracking sessions closed");
   },
   listOpenForActiveRuns(): TrackingSessionRow[] {
     return statements.listOpenSessionsForActiveRuns.all() as TrackingSessionRow[];
@@ -503,6 +638,9 @@ export const registeredUserRepository = {
   },
   deleteByUserId(guildId: string, userId: string) {
     const result = statements.deleteRegisteredUserById.run({ guildId, userId });
+    if (result.changes > 0) {
+      scheduleDatabaseBackup("registered user deleted");
+    }
     return result.changes > 0;
   },
   deleteManyByUserIds(guildId: string, userIds: string[]) {
@@ -511,10 +649,19 @@ export const registeredUserRepository = {
     }
 
     const result = statements.deleteRegisteredUsersByGuildAndUserIds.run(guildId, JSON.stringify(userIds));
+    if (result.changes > 0) {
+      scheduleDatabaseBackup("registered users deleted");
+    }
     return result.changes;
   },
   upsert(input: { guildId: string; userId: string; username: string; enrollmentNo: string }) {
     statements.upsertRegisteredUser.run(input);
+    scheduleDatabaseBackup("registered user saved");
     return this.findByUserId(input.guildId, input.userId);
   }
 };
+
+if (databaseBackupEnabled) {
+  installDatabaseBackupSignalHandlers();
+  scheduleDatabaseBackup("startup");
+}

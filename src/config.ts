@@ -13,6 +13,11 @@ const required = (name: string, fallback?: string) => {
   return value;
 };
 
+const optionalPath = (name: string) => {
+  const value = process.env[name]?.trim();
+  return value ? path.resolve(process.cwd(), value) : null;
+};
+
 export const config = {
   discordToken: required("DISCORD_TOKEN", ""),
   clientId: required("CLIENT_ID", ""),
@@ -20,5 +25,7 @@ export const config = {
   sessionSecret: required("SESSION_SECRET", "change-me"),
   dashboardUsername: required("DASHBOARD_USERNAME", "admin"),
   dashboardPassword: required("DASHBOARD_PASSWORD", "change-me"),
-  databasePath: path.resolve(process.cwd(), process.env.DATABASE_PATH ?? "./data/attendance.sqlite")
+  databasePath: path.resolve(process.cwd(), process.env.DATABASE_PATH ?? "./data/attendance.sqlite"),
+  databaseBackupPath: optionalPath("DATABASE_BACKUP_PATH"),
+  databaseBackupDebounceMs: Number(process.env.DATABASE_BACKUP_DEBOUNCE_MS ?? 1500)
 };

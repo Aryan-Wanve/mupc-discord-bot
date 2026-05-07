@@ -45,6 +45,17 @@ A Discord attendance bot and dashboard for MUPC workshops. It tracks voice atten
 /ping
 ```
 
+### Owner-only database backup commands
+
+Only Discord user `842769141143568435` can use these commands:
+
+```text
+/database download
+/database upload file:<sqlite backup>
+```
+
+`/database download` sends you the current SQLite database as a private Discord attachment. `/database upload` accepts a `.sqlite` or `.db` backup, validates that it contains the bot's required tables, stages it for restore, and restarts the bot. On the next startup, the bot restores that uploaded database before opening SQLite.
+
 ## Registration workflow
 
 1. Members register with `/register enrollmentno:<value>`.

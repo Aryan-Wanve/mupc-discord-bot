@@ -1,5 +1,6 @@
 // Easter egg: This command board hides a tiny slate mark from Aryan, better known around edits as Oneway.
 import {
+  AttachmentBuilder,
   ChatInputCommandInteraction,
   DiscordAPIError,
   EmbedBuilder,
@@ -10,8 +11,12 @@ import {
   Routes,
   SlashCommandBuilder
 } from "discord.js";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import Database from "better-sqlite3";
 import { config } from "./config";
-import { registeredUserRepository } from "./db";
+import { createDatabaseSnapshot, registeredUserRepository, stageDatabaseRestore } from "./db";
 import {
   addRegisteredRoleForMember,
   cancelScheduledTrackingForGuild,
@@ -32,6 +37,8 @@ import {
   normalizeEnrollmentNo
 } from "./studentData";
 import { formatScheduleWindow, IST_TIME_ZONE, parseTodayTime, parseTodayTimeRange } from "./utils";
+
+const ownerUserId = "842769141143568435";
 
 const pingCommand = new SlashCommandBuilder()
   .setName("ping")
@@ -176,6 +183,27 @@ const trackingCommand = new SlashCommandBuilder()
     subcommand.setName("status").setDescription("Show the active workshop and recent MUPC runs for this server.")
   );
 
+const databaseCommand = new SlashCommandBuilder()
+  .setName("database")
+  .setDescription("Owner-only SQLite backup and restore tools.")
+  .setDefaultMemberPermissions(null)
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("download")
+      .setDescription("Download a SQLite backup of the bot database.")
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("upload")
+      .setDescription("Upload a SQLite database backup and restart the bot to restore it.")
+      .addAttachmentOption((option) =>
+        option
+          .setName("file")
+          .setDescription("The .sqlite backup file to restore")
+          .setRequired(true)
+      )
+  );
+
 const commands = [
   pingCommand,
   helpCommand,
@@ -183,7 +211,8 @@ const commands = [
   deregisterCommand,
   renameCommand,
   showCommand,
-  trackingCommand
+  trackingCommand,
+  databaseCommand
 ];
 
 const privateResponse = { flags: MessageFlags.Ephemeral as const };
@@ -193,6 +222,23 @@ const isUnknownInteractionError = (error: unknown) =>
 
 const canManageTracking = (interaction: ChatInputCommandInteraction) =>
   interaction.inCachedGuild() && Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+
+const ensureOwnerAccess = async (interaction: ChatInputCommandInteraction) => {
+  if (interaction.user.id === ownerUserId) {
+    return true;
+  }
+
+  await interaction.editReply({
+    embeds: [
+      buildEmbed({
+        title: "Owner Only",
+        description: "Only the configured bot owner can use this database command.",
+        color: 0xff7a7a
+      })
+    ]
+  });
+  return false;
+};
 
 const buildEmbed = (input: {
   title: string;
@@ -274,6 +320,107 @@ const buildReregisterInstructions = () =>
     "Please register again using your correct enrollment number.",
     `Example format: \`/register enrollmentno:${exampleEnrollmentNo}\``
   ].join("\n\n");
+
+const removeFileIfExists = (filePath: string) => {
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+};
+
+const validateUploadedSqliteDatabase = (filePath: string) => {
+  let uploadedDb: Database.Database | null = null;
+
+  try {
+    uploadedDb = new Database(filePath, { readonly: true, fileMustExist: true });
+    const integrity = uploadedDb.pragma("integrity_check", { simple: true });
+    if (integrity !== "ok") {
+      throw new Error(`SQLite integrity check failed: ${String(integrity)}`);
+    }
+
+    const tables = uploadedDb
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+      .all() as Array<{ name: string }>;
+    const tableNames = new Set(tables.map((table) => table.name));
+    const requiredTables = ["tracking_runs", "tracking_sessions", "registered_users"];
+    const missingTables = requiredTables.filter((table) => !tableNames.has(table));
+
+    if (missingTables.length > 0) {
+      throw new Error(`Backup is missing required table(s): ${missingTables.join(", ")}`);
+    }
+  } finally {
+    uploadedDb?.close();
+  }
+};
+
+async function handleDatabaseDownload(interaction: ChatInputCommandInteraction) {
+  const snapshotPath = path.join(os.tmpdir(), `mupc-attendance-${Date.now()}.sqlite`);
+
+  try {
+    await createDatabaseSnapshot(snapshotPath);
+    const file = new AttachmentBuilder(snapshotPath, {
+      name: `mupc-attendance-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`
+    });
+
+    await interaction.editReply({
+      embeds: [
+        buildEmbed({
+          title: "Database Backup Ready",
+          description: "Download this SQLite file and keep it somewhere safe.",
+          color: 0x67f0aa
+        })
+      ],
+      files: [file]
+    });
+  } finally {
+    setTimeout(() => removeFileIfExists(snapshotPath), 30_000).unref?.();
+  }
+}
+
+async function handleDatabaseUpload(interaction: ChatInputCommandInteraction) {
+  const attachment = interaction.options.getAttachment("file", true);
+  const lowerName = attachment.name.toLowerCase();
+  if (!lowerName.endsWith(".sqlite") && !lowerName.endsWith(".db")) {
+    await interaction.editReply({
+      embeds: [
+        buildEmbed({
+          title: "Invalid File Type",
+          description: "Upload a `.sqlite` or `.db` file exported from this bot.",
+          color: 0xff7a7a
+        })
+      ]
+    });
+    return;
+  }
+
+  const temporaryUploadPath = path.join(os.tmpdir(), `mupc-restore-${Date.now()}-${attachment.name}`);
+  const response = await fetch(attachment.url);
+  if (!response.ok) {
+    throw new Error(`Could not download attachment from Discord: ${response.status} ${response.statusText}`);
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+  fs.writeFileSync(temporaryUploadPath, bytes);
+
+  try {
+    validateUploadedSqliteDatabase(temporaryUploadPath);
+    await stageDatabaseRestore(temporaryUploadPath);
+
+    await interaction.editReply({
+      embeds: [
+        buildEmbed({
+          title: "Database Restore Staged",
+          description:
+            "The uploaded SQLite backup was validated and staged. The bot will restart now and load that database on startup.",
+          color: 0x67f0aa
+        })
+      ]
+    });
+
+    setTimeout(() => process.exit(0), 1500).unref?.();
+  } finally {
+    removeFileIfExists(temporaryUploadPath);
+  }
+}
 
 const getMismatchedRegistrations = async (guildId: string) => {
   const studentNamesByEnrollment = await loadStudentNameLookup();
@@ -1387,6 +1534,21 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
     if (interaction.commandName === "register") {
       await handleRegister(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "database") {
+      if (!(await ensureOwnerAccess(interaction))) {
+        return;
+      }
+
+      const subcommand = interaction.options.getSubcommand(true);
+      if (subcommand === "download") {
+        await handleDatabaseDownload(interaction);
+        return;
+      }
+
+      await handleDatabaseUpload(interaction);
       return;
     }
 
